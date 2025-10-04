@@ -1,147 +1,142 @@
 import React, { useState } from 'react';
-
-// MUI Core Components
-import { Box, Paper, TextField, Drawer, AppBar, Toolbar, List, Typography, IconButton, ListItem, ListItemButton, ListItemIcon, ListItemText, Card, CardContent, Grid, Button,
-  useTheme, useMediaQuery, Chip, Select, FormControl, InputLabel, FormHelperText, CircularProgress, Alert, Snackbar, Table, TableBody,
-  TableCell, TableContainer, TableHead, TableRow, Dialog, DialogTitle, DialogContent, DialogActions, MenuItem, Tooltip,
-  Accordion, AccordionSummary, AccordionDetails} from '@mui/material';
-
-
-  // MUI Icons
 import {
-  Dashboard as DashboardIcon, Add as AddIcon, ViewList as ViewListIcon, CheckCircle as ReceiveIcon,
-  Assignment as AssignIcon, Assessment as ReportsIcon, Menu as MenuIcon, Inventory2, Build, AttachMoney, ExpandLessOutlined, 
-  Description, TrendingUp, Warning, CheckCircleOutline, Star, AutoAwesome, TuneOutlined, AssignmentTurnedIn as Assignment, Delete,
-  Visibility as VisibilityIcon, Edit as EditIcon, Save as SaveIcon, Cancel as CancelIcon, DeleteForever as DeleteForeverIcon, } from '@mui/icons-material';
+  Box, Grid, FormControl, InputLabel, Select, MenuItem
+} from '@mui/material';
 
-import { styled, createTheme, ThemeProvider } from '@mui/material/styles';
+export default function Filter() {
+  // Independent states
+  const [chain, setChain] = useState('');
+  const [category, setCategory] = useState('');
+  const [storeClass, setStoreClass] = useState('');
+  const [transaction, setTransaction] = useState('');
 
-import ListOfBranch from '../components/ListOfBranch'
+  // --- Mock data: in real app, replace with fetched / dynamic options ---
+  const chainOptions = ['VARIOUS CHAIN', 'SM HOMEWORLD', 'OUR HOME'];
 
-const whiteTheme = createTheme({
-  palette: {
-    mode: 'light',
-    primary: {
-      main: '#2563eb',
-    },
-    secondary: {
-      main: '#7c3aed',
-    },
-    background: {
-      default: '#f8f9fa',
-      paper: '#ffffff',
-    },
-    text: {
-      primary: '#1f2937',
-      secondary: '#6b7280',
-    }
-  },
-  typography: {
-    fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif',
-    fontWeightRegular: 400,
-    fontWeightMedium: 500,
-    fontWeightBold: 700,
-  }
-});
+  const categoryOptions = {
+    'VARIOUS CHAIN': ['CLOCKS', 'DECOR', 'FRAMES', 'LAMPS', 'STATIONERY'],
+    'SM HOMEWORLD': ['KITCHEN', 'BEDDING', 'FURNITURE'],
+    'OUR HOME': ['DECOR', 'LIGHTING', 'TABLEWARE'],
+  };
 
-const SectionHeader = ({ children, sx }) => (
-  <Typography
-    variant="h6"
-    sx={{
-      display: 'flex',
-      alignItems: 'center',
-      color: '#374151',
-      fontWeight: 600,
-      mb: 2,
-      mt: 3,
-    }}
-  >
-    {children}
-  </Typography>
-);
+  const storeClassOptions = {
+    CLOCKS: ['A STORES', 'B STORES', 'C STORES'],
+    DECOR: ['A STORES', 'B STORES'],
+    FRAMES: ['B STORES', 'C STORES'],
+    LAMPS: ['A STORES', 'C STORES'],
+    STATIONERY: ['C STORES'],
+    KITCHEN: ['A STORES', 'B STORES'],
+    BEDDING: ['A STORES'],
+    FURNITURE: ['A STORES', 'B STORES'],
+    LIGHTING: ['A STORES', 'B STORES'],
+    TABLEWARE: ['A STORES', 'C STORES'],
+  };
 
-export default function ColorTextFields() {
-    
-    const [selectedChain, setChain] = React.useState('');
-  
-    const handleChangeChain = (event) => {
-        setChain(event.target.value);
-    };
-    
-    return (
-        <Box component="form" sx={{ '& > :not(style)': { width: '100%' } }} noValidate autoComplete="off" >
-                <Grid container spacing={3}>
-                    <Grid item xs={12} md={3}>
-                        <FormControl required size="small" sx={{width: '100%', '& .MuiInputLabel-root.Mui-focused': {
-                        backgroundColor: 'white', paddingX: '5px' }  }}>
-                            <InputLabel id="filter-chain">Chain</InputLabel>
-                            <Select
-                            labelId="filter-chain"
-                            id="demo-simple-select-required"
-                            value={selectedChain}
-                            label="Chain *"
-                            onChange={handleChangeChain}
-                            >
-                                <MenuItem value="VARIOUS CHAIN">VARIOUS CHAIN</MenuItem>
-                                <MenuItem value="SM HOMEWORLD">SM HOMEWORLD</MenuItem>
-                                <MenuItem value="OUR HOME">OUR HOME</MenuItem>
-                            </Select>
-                        </FormControl>
-                    </Grid>
-                    <Grid item xs={12} md={3}>
-                        <FormControl required size="small" sx={{width: '100%', '& .MuiInputLabel-root.Mui-focused': {
-                        backgroundColor: 'white', paddingX: '5px' }  }}>
-                            <InputLabel id="filter-category">Category</InputLabel>
-                            <Select
-                            labelId="filter-category"
-                            id="demo-simple-select-required"
-                            value={selectedChain}
-                            label="Chain *"
-                            onChange={handleChangeChain}
-                            >
-                                <MenuItem value="CLOCKS">CLOCKS</MenuItem>
-                                <MenuItem value="DERCOR">DERCOR</MenuItem>
-                                <MenuItem value="FRAMES">FRAMES</MenuItem>
-                                <MenuItem value="LAMPS">LAMPS</MenuItem>
-                                <MenuItem value="STATIONERY">STATIONERY</MenuItem>
-                            </Select>
-                        </FormControl>
-                    </Grid>
-                    <Grid item xs={12} md={3}>
-                        <FormControl required size="small" sx={{width: '100%', '& .MuiInputLabel-root.Mui-focused': {
-                        backgroundColor: 'white', paddingX: '5px' }  }}>
-                            <InputLabel id="filter-store-class">Store Classification</InputLabel>
-                            <Select
-                            labelId="filter-store-class"
-                            id="demo-simple-select-required"
-                            value={selectedChain}
-                            label="Chain *"
-                            onChange={handleChangeChain}
-                            >
-                                <MenuItem value="VARIOUS CHAIN">VARIOUS CHAIN</MenuItem>
-                                <MenuItem value="SM HOMEWORLD">SM HOMEWORLD</MenuItem>
-                                <MenuItem value="OUR HOME">OUR HOME</MenuItem>
-                            </Select>
-                        </FormControl>
-                    </Grid>
-                    <Grid item xs={12} md={3}>
-                        <FormControl required size="small" sx={{width: '100%', '& .MuiInputLabel-root.Mui-focused': {
-                        backgroundColor: 'white', paddingX: '5px' }  }}>
-                            <InputLabel id="filter-transaction-type" sx={{ backgroundColor: whiteTheme}}>Transaction Type</InputLabel>
-                            <Select
-                            labelId="filter-transaction-type"
-                            id="demo-simple-select-required"
-                            value={selectedChain}
-                            label="Chain *"
-                            onChange={handleChangeChain}
-                            >
-                                <MenuItem value="VARIOUS CHAIN">VARIOUS CHAIN</MenuItem>
-                                <MenuItem value="SM HOMEWORLD">SM HOMEWORLD</MenuItem>
-                                <MenuItem value="OUR HOME">OUR HOME</MenuItem>
-                            </Select>
-                        </FormControl>
-                    </Grid>
-                </Grid>
-        </Box>
-    );
+  const transactionOptions = {
+    'A STORES': ['SALE', 'RETURN', 'TRANSFER'],
+    'B STORES': ['SALE', 'RETURN'],
+    'C STORES': ['SALE'],
+  };
+
+  // --- Handlers ---
+  const handleChainChange = (e) => {
+    setChain(e.target.value);
+    setCategory('');
+    setStoreClass('');
+    setTransaction('');
+  };
+
+  const handleCategoryChange = (e) => {
+    setCategory(e.target.value);
+    setStoreClass('');
+    setTransaction('');
+  };
+
+  const handleStoreClassChange = (e) => {
+    setStoreClass(e.target.value);
+    setTransaction('');
+  };
+
+  const handleTransactionChange = (e) => {
+    setTransaction(e.target.value);
+  };
+
+  // --- Dynamic filtered options ---
+  const availableCategories = chain ? categoryOptions[chain] || [] : [];
+  const availableStoreClasses = category ? storeClassOptions[category] || [] : [];
+  const availableTransactions = storeClass ? transactionOptions[storeClass] || [] : [];
+
+  return (
+    <Box component="form" noValidate autoComplete="off" sx={{ '& > :not(style)': { width: '100%' } }}>
+      <Grid container spacing={3}>
+        {/* Chain */}
+        <Grid item xs={12} md={3}>
+          <FormControl size="small" fullWidth required>
+            <InputLabel id="filter-chain">Chain</InputLabel>
+            <Select
+              labelId="filter-chain"
+              value={chain}
+              label="Chain"
+              onChange={handleChainChange}
+            >
+              {chainOptions.map((c) => (
+                <MenuItem key={c} value={c}>{c}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </Grid>
+
+        {/* Category */}
+        <Grid item xs={12} md={3}>
+          <FormControl size="small" fullWidth required disabled={!chain}>
+            <InputLabel id="filter-category">Category</InputLabel>
+            <Select
+              labelId="filter-category"
+              value={category}
+              label="Category"
+              onChange={handleCategoryChange}
+            >
+              {availableCategories.map((cat) => (
+                <MenuItem key={cat} value={cat}>{cat}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </Grid>
+
+        {/* Store Classification */}
+        <Grid item xs={12} md={3}>
+          <FormControl size="small" fullWidth required disabled={!category}>
+            <InputLabel id="filter-store-class">Store Classification</InputLabel>
+            <Select
+              labelId="filter-store-class"
+              value={storeClass}
+              label="Store Classification"
+              onChange={handleStoreClassChange}
+            >
+              {availableStoreClasses.map((sc) => (
+                <MenuItem key={sc} value={sc}>{sc}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </Grid>
+
+        {/* Transaction */}
+        <Grid item xs={12} md={3}>
+          <FormControl size="small" fullWidth required disabled={!storeClass}>
+            <InputLabel id="filter-transaction">Transaction Type</InputLabel>
+            <Select
+              labelId="filter-transaction"
+              value={transaction}
+              label="Transaction Type"
+              onChange={handleTransactionChange}
+            >
+              {availableTransactions.map((tx) => (
+                <MenuItem key={tx} value={tx}>{tx}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </Grid>
+      </Grid>
+    </Box>
+  );
 }

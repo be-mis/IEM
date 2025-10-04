@@ -8,10 +8,10 @@ import { Box, Drawer, AppBar, Toolbar, List, Typography, IconButton, ListItem, L
 
   // MUI Icons
 import {
-  Dashboard as DashboardIcon, Add as AddIcon, ViewList as ViewListIcon, CheckCircle as ReceiveIcon,
+  Dashboard as DashboardIcon, Add as AddIcon, ViewList as ViewListIcon, CheckCircle as ReceiveIcon, Inventory2Outlined, StoreMallDirectoryOutlined,
   Assignment as AssignIcon, Assessment as ReportsIcon, Menu as MenuIcon, Inventory2, Build, AttachMoney, ExpandLessOutlined, 
   Description, TrendingUp, Warning, CheckCircleOutline, Star, AutoAwesome, TuneOutlined, AssignmentTurnedIn as Assignment, Delete,
-  Visibility as VisibilityIcon, Edit as EditIcon, Save as SaveIcon, Cancel as CancelIcon, DeleteForever as DeleteForeverIcon, } from '@mui/icons-material';
+  Visibility as VisibilityIcon, Edit as EditIcon, Save as SaveIcon, Cancel as CancelIcon, DeleteForever as DeleteForeverIcon, DescriptionOutlined } from '@mui/icons-material';
 
 import { styled, createTheme, ThemeProvider } from '@mui/material/styles';
 import MuiAlert from '@mui/material/Alert';
@@ -20,8 +20,8 @@ import MuiAlert from '@mui/material/Alert';
 import { useInventoryItems, useDashboardStats } from '../hooks/useInventory';
 
 import ExclusivityForm from '../components/ExclusivityForm';
-import ListOfBranch from '../components/ListOfBranch';
-
+import ItemMaintenance from '../components/ItemMaintenance';
+import StoreMaintenance from '../components/StoreMaintenance';
 
 // Create clean white theme
 const drawerWidth = 300;
@@ -313,8 +313,9 @@ const Dashboard = () => {
   // Update menuItems to include Disposal
   const menuItems = [
     { text: 'Dashboard', icon: <DashboardIcon />, view: 'dashboard' },
-    { text: 'Exclusivity Form', icon: <AddIcon />, view: 'exclusivityform' },
-    { text: 'Add Item', icon: <AddIcon />, view: 'add' },
+    { text: 'Exclusivity Form', icon: <DescriptionOutlined />, view: 'exclusivityform' },
+    { text: 'Item Maintenance', icon: <Inventory2Outlined />, view: 'itemmaintenance' },
+    { text: 'Store Maintenance', icon: <StoreMallDirectoryOutlined />, view: 'storemaintenance' },
     { text: 'View Items', icon: <ViewListIcon />, view: 'view' },
     { text: 'Assign', icon: <AssignIcon />, view: 'assign' },
     { text: 'Receive', icon: <ReceiveIcon />, view: 'receive' },
@@ -453,272 +454,24 @@ const Dashboard = () => {
               </CardContent>
             </UltraModernCard>
         );
-      case 'add':
+      case 'itemmaintenance':
         return (
           <Box sx={{ mb: 4 }}>
             {/* <Typography variant="h4" sx={{ color: '#1f2937', mb: 2 }}>Add New Item</Typography> */}
             <UltraModernCard>
               <CardContent sx={{ p: 4 }}>
-                <Box component="form" onSubmit={(e) => { e.preventDefault(); handleAddItem(); }}>
-                  <SectionHeader><TuneOutlined />Parameter</SectionHeader>
-                  <Grid container spacing={3}>
-                    <Grid item xs={12} md={3}>
-                      <FormControl fullWidth  size="small">
-                        <InputLabel>Chain</InputLabel>
-                        <Select
-                          value={newItem.category}
-                          label="Category"
-                          onChange={(e) => setNewItem({ ...newItem, category: e.target.value })}
-                          sx={{
-                            background: '#ffffff',
-                            borderRadius: '8px',
-                          }}
-                        >
-                          <MenuItem value="VARIOUS CHAIN">VARIOUS CHAIN</MenuItem>
-                          <MenuItem value="SM HOMEWORLD">SM HOMEWORLD</MenuItem>
-                          <MenuItem value="OUR HOME">OUR HOME</MenuItem>
-                        </Select>
-                      </FormControl>
-                    </Grid>
-                    <Grid item xs={12} md={3}>
-                      <FormControl fullWidth size="small">
-                        <InputLabel>Category</InputLabel>
-                        <Select
-                          value={newItem.category}
-                          label="Category"
-                          onChange={(e) => setNewItem({ ...newItem, category: e.target.value })}
-                          sx={{
-                            background: '#ffffff',
-                            borderRadius: '8px',
-                          }}
-                        >
-                          <MenuItem value="LAMPS">LAMPS</MenuItem>
-                          <MenuItem value="DECOR">DECOR</MenuItem>
-                          <MenuItem value="FRAMES">FRAMES</MenuItem>
-                          <MenuItem value="CLOCKS">CLOCKS</MenuItem>
-                          <MenuItem value="STATIONERY">STATIONERY</MenuItem>
-                        </Select>
-                      </FormControl>
-                    </Grid>
-                    <Grid item xs={12} md={3}>
-                      <FormControl fullWidth size="small">
-                        <InputLabel>Store Classification</InputLabel>
-                        <Select
-                          value={newItem.category}
-                          label="Category"
-                          onChange={(e) => setNewItem({ ...newItem, category: e.target.value })}
-                          sx={{
-                            background: '#ffffff',
-                            borderRadius: '8px',
-                          }}
-                        >
-                          <MenuItem value="Desktop">Desktop</MenuItem>
-                          <MenuItem value="Laptop">Laptop</MenuItem>
-                          <MenuItem value="Monitor">Monitor</MenuItem>
-                          <MenuItem value="Network Equipment">Network Equipment</MenuItem>
-                          <MenuItem value="Mobile Device">Mobile Device</MenuItem>
-                          <MenuItem value="Accessories">Accessories</MenuItem>
-                          <MenuItem value="Other">Other</MenuItem>
-                        </Select>
-                      </FormControl>
-                    </Grid>
-                    <Grid item xs={12} md={3}>
-                      <FormControl fullWidth size="small">
-                        <InputLabel>Transaction Type</InputLabel>
-                        <Select
-                          value={newItem.category}
-                          label="Category"
-                          onChange={(e) => setNewItem({ ...newItem, category: e.target.value })}
-                          sx={{
-                            background: '#ffffff',
-                            borderRadius: '8px',
-                          }}
-                        >
-                          <MenuItem value="Desktop">Desktop</MenuItem>
-                          <MenuItem value="Laptop">Laptop</MenuItem>
-                          <MenuItem value="Monitor">Monitor</MenuItem>
-                          <MenuItem value="Network Equipment">Network Equipment</MenuItem>
-                          <MenuItem value="Mobile Device">Mobile Device</MenuItem>
-                          <MenuItem value="Accessories">Accessories</MenuItem>
-                          <MenuItem value="Other">Other</MenuItem>
-                        </Select>
-                      </FormControl>
-                    </Grid>
-                    {/* <Grid item xs={12} md={4}>
-                      <StyledTextField
-                        fullWidth
-                        label="Brand"
-                        value={newItem.brand}
-                        onChange={(e) => setNewItem({ ...newItem, brand: e.target.value })}
-                      />
-                    </Grid>
-                    <Grid item xs={12} md={4}>
-                      <StyledTextField
-                        fullWidth
-                        label="Model"
-                        value={newItem.model}
-                        onChange={(e) => setNewItem({ ...newItem, model: e.target.value })}
-                      />
-                    </Grid>
-                    <Grid item xs={12} md={4}>
-                      <StyledTextField
-                        fullWidth
-                        label="Serial Number *"
-                        value={newItem.serialNumber}
-                        onChange={(e) => setNewItem({ ...newItem, serialNumber: e.target.value })}
-                        required
-                      />
-                    </Grid> */}
-                  </Grid>
-
-                  <SectionHeader><Build /> List of Branch</SectionHeader>
-                  <Grid container spacing={3}>
-                    <Grid item xs={12} md={12}>
-                       <Accordion >
-                        <AccordionSummary
-                          expandIcon={<ExpandLessOutlined />}
-                          aria-controls="panel1-content"
-                          id="panel1-header"
-                        >
-                          <Typography component="span">Accordion 1</Typography>
-                        </AccordionSummary>
-                        <AccordionDetails>
-                          <Typography>
-                            Lorem ipsum dolor sit amet, consectetur adipiscing elit. Suspendisse
-                            malesuada lacus ex, sit amet blandit leo lobortis eget.
-                          </Typography>
-                          <ListOfBranch />
-                        </AccordionDetails>
-                      </Accordion>
-                      <Accordion>
-                        <AccordionSummary
-                          expandIcon={<ExpandLessOutlined />}
-                          aria-controls="panel2-content"
-                          id="panel2-header"
-                        >
-                          <Typography component="span">Accordion 2</Typography>
-                        </AccordionSummary>
-                        <AccordionDetails>
-                          <Typography>
-                            Lorem ipsum dolor sit amet, consectetur adipiscing elit. Suspendisse
-                            malesuada lacus ex, sit amet blandit leo lobortis eget.
-                          </Typography>
-                        </AccordionDetails>
-                      </Accordion>
-                    </Grid>
-                    <Grid item xs={12} md={6}>
-                      <StyledTextField
-                        fullWidth
-                        label="Hostname"
-                        value={newItem.hostname}
-                        onChange={(e) => setNewItem({ ...newItem, hostname: e.target.value })}
-                      />
-                    </Grid>
-                    <Grid item xs={12} md={6}>
-                      <StyledTextField
-                        fullWidth
-                        label="Operating System"
-                        value={newItem.operatingSystem}
-                        onChange={(e) => setNewItem({ ...newItem, operatingSystem: e.target.value })}
-                      />
-                    </Grid>
-                    <Grid item xs={12} md={4}>
-                      <StyledTextField
-                        fullWidth
-                        label="Processor"
-                        value={newItem.processor}
-                        onChange={(e) => setNewItem({ ...newItem, processor: e.target.value })}
-                      />
-                    </Grid>
-                    <Grid item xs={12} md={4}>
-                      <StyledTextField
-                        fullWidth
-                        label="RAM"
-                        value={newItem.ram}
-                        onChange={(e) => setNewItem({ ...newItem, ram: e.target.value })}
-                      />
-                    </Grid>
-                    <Grid item xs={12} md={4}>
-                      <StyledTextField
-                        fullWidth
-                        label="Storage"
-                        value={newItem.storage}
-                        onChange={(e) => setNewItem({ ...newItem, storage: e.target.value })}
-                      />
-                    </Grid>
-                  </Grid>
-
-                  <SectionHeader><AttachMoney /> List of Item</SectionHeader>
-                  <Grid container spacing={3}>
-                    <Grid item xs={12} md={3}>
-                      <StyledTextField
-                        fullWidth
-                        label="Purchase Date"
-                        type="date"
-                        value={newItem.purchaseDate}
-                        onChange={(e) => setNewItem({ ...newItem, purchaseDate: e.target.value })}
-                        InputLabelProps={{ shrink: true }}
-                      />
-                    </Grid>
-                    <Grid item xs={12} md={3}>
-                      <StyledTextField
-                        fullWidth
-                        label="Deployment Date"
-                        type="date"
-                        value={newItem.deploymentDate}
-                        onChange={(e) => setNewItem({ ...newItem, deploymentDate: e.target.value })}
-                        InputLabelProps={{ shrink: true }}
-                      />
-                    </Grid>
-                    <Grid item xs={12} md={3}>
-                      <StyledTextField
-                        fullWidth
-                        label="Warranty Period"
-                        value={newItem.warrantyPeriod}
-                        onChange={(e) => setNewItem({ ...newItem, warrantyPeriod: e.target.value })}
-                        placeholder="e.g., 3 years"
-                      />
-                    </Grid>
-                    <Grid item xs={12} md={3}>
-                      <StyledTextField
-                        fullWidth
-                        label="Location"
-                        value={newItem.location}
-                        onChange={(e) => setNewItem({ ...newItem, location: e.target.value })}
-                      />
-                    </Grid>
-                  </Grid>
-
-                  <SectionHeader><Description /> Exclusion</SectionHeader>
-                  <Grid container spacing={3}>
-                    <Grid item xs={12}>
-                      <StyledTextField
-                        fullWidth
-                        multiline
-                        rows={4}
-                        label="Notes"
-                        value={newItem.notes}
-                        onChange={(e) => setNewItem({ ...newItem, notes: e.target.value })}
-                        placeholder="Any additional notes or comments..."
-                      />
-                    </Grid>
-                  </Grid>
-
-                  <Box sx={{ 
-                    display: 'flex', 
-                    justifyContent: 'flex-end', 
-                    gap: 2, 
-                    pt: 4,
-                    borderTop: '1px solid #e2e8f0'
-                  }}>
-                    <Button onClick={() => setCurrentView('dashboard')} disabled={loading}>
-                      Cancel
-                    </Button>
-                    <FloatingActionButton type="submit" disabled={loading}>
-                      {loading ? 'Adding...' : 'Add Item'}
-                    </FloatingActionButton>
-                  </Box>
-                </Box>
+                <ItemMaintenance />
+              </CardContent>
+            </UltraModernCard>
+          </Box>
+        );
+      case 'storemaintenance':
+        return (
+          <Box sx={{ mb: 4 }}>
+            {/* <Typography variant="h4" sx={{ color: '#1f2937', mb: 2 }}>Add New Item</Typography> */}
+            <UltraModernCard>
+              <CardContent sx={{ p: 4 }}>
+                <StoreMaintenance />
               </CardContent>
             </UltraModernCard>
           </Box>
@@ -1772,8 +1525,8 @@ const Dashboard = () => {
             <Typography variant="h6" sx={{ flexGrow: 1, fontWeight: '700' }}>
               {currentView === 'dashboard' ? 'Dashboard' :
                currentView === 'exclusivityform' ? 'Exclusivity Form' :
-               currentView === 'add' ? 'Add Item' :
-               currentView === 'add' ? 'Add Item' :
+               currentView === 'itemmaintenance' ? 'Item Maintenance' :
+               currentView === 'storemaintenance' ? 'Store Maintenance' :
                currentView === 'view' ? 'View Items' :
                currentView === 'assign' ? 'Assign' :
                currentView === 'receive' ? 'Receive' :

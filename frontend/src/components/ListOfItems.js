@@ -1,6 +1,10 @@
 import * as React from 'react';
-import {TextField, TableRow, TablePagination, TableHead, TableContainer, TableCell, TableBody, Table, Paper
+import {
+  TextField, TableRow, TablePagination, TableHead, TableContainer,
+  TableCell, TableBody, Table, Paper, Box, InputAdornment, IconButton
 } from '@mui/material';
+import SearchIcon from '@mui/icons-material/Search';
+import ClearIcon from '@mui/icons-material/Clear';
 
 const columns = [
   { id: 'itemCode', label: 'Item Code', width: 200 },
@@ -12,6 +16,9 @@ const columns = [
 function createData(itemCode, description, quantity) {
   return { itemCode, description, quantity };
 }
+
+// Build a stable key for each row (even if itemCode duplicates)
+const rowKey = (r) => `${r.itemCode}|${r.description}`;
 
 const rows = [
   createData('1016235984723905', 'Classic white cotton T-shirt for everyday wear.', 9),
@@ -36,35 +43,59 @@ const rows = [
 ];
 
 export default function StickyHeadTable() {
+  // Search
+  const [search, setSearch] = React.useState('');
+
+  // Pagination
   const [page, setPage] = React.useState(0);
   const [rowsPerPage, setRowsPerPage] = React.useState(10);
 
-  // Keep editable quantity values per row (as numbers). Use index to avoid collisions.
+  // Keep editable quantity values per row, keyed by stable composite key
   const [quantities, setQuantities] = React.useState(() =>
-    Object.fromEntries(rows.map((r, idx) => [idx, Number(r.quantity) ?? 0]))
+    Object.fromEntries(rows.map((r) => [rowKey(r), Number(r.quantity) ?? 0]))
   );
 
   const handleChangePage = (_event, newPage) => setPage(newPage);
-
   const handleChangeRowsPerPage = (event) => {
     setRowsPerPage(+event.target.value);
     setPage(0);
   };
 
+  // Filter rows based on search (itemCode or description)
+  const filtered = React.useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return rows;
+    return rows.filter(
+      (r) =>
+        r.itemCode.toLowerCase().includes(q) ||
+        r.description.toLowerCase().includes(q)
+    );
+  }, [search]);
+
+  // Slice for pagination AFTER filtering
+  const pagedRows = React.useMemo(
+    () => filtered.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage),
+    [filtered, page, rowsPerPage]
+  );
+
+  // Reset to first page when search changes
+  React.useEffect(() => {
+    setPage(0);
+  }, [search]);
+
   // Update as user types; allow empty string temporarily for UX
-  const handleQtyChange = (rowIdx) => (e) => {
+  const handleQtyChange = (key) => (e) => {
     const val = e.target.value;
-    // Accept empty string; otherwise coerce to number but do not clamp yet
-    setQuantities((prev) => ({ ...prev, [rowIdx]: val === '' ? '' : Number(val) }));
+    setQuantities((prev) => ({ ...prev, [key]: val === '' ? '' : Number(val) }));
   };
 
   // Normalize on blur: clamp to >= 0 and integer
-  const handleQtyBlur = (rowIdx) => () => {
+  const handleQtyBlur = (key) => () => {
     setQuantities((prev) => {
-      let v = prev[rowIdx];
+      let v = prev[key];
       if (v === '' || isNaN(v)) v = 0;
       v = Math.max(0, Math.trunc(Number(v)));
-      return { ...prev, [rowIdx]: v };
+      return { ...prev, [key]: v };
     });
   };
 
@@ -74,19 +105,43 @@ export default function StickyHeadTable() {
     setTimeout(() => e.target.focus(), 0);
   };
 
-  const pagedRows = rows.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
-
   return (
     <Paper sx={{ width: '100%', overflow: 'hidden' }}>
-      <TableContainer sx={{ maxHeight: 440 }}>
-        <Table stickyHeader aria-label="sticky table">
+      {/* Search bar */}
+      <Box sx={{ p: 2 }}>
+        <TextField
+          fullWidth
+          size="small"
+          label="Search items (code or description)"
+          placeholder="e.g., 1039… or 'wireless mouse'"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <SearchIcon aria-label="search icon" />
+              </InputAdornment>
+            ),
+            endAdornment: search ? (
+              <InputAdornment position="end">
+                <IconButton aria-label="clear search" onClick={() => setSearch('')} edge="end">
+                  <ClearIcon />
+                </IconButton>
+              </InputAdornment>
+            ) : null,
+          }}
+        />
+      </Box>
+
+      <TableContainer sx={{ height: 560 }}>
+        <Table stickyHeader aria-label="items table">
           <TableHead>
             <TableRow>
               {columns.map((column) => (
                 <TableCell
                   key={column.id}
                   align={column.align}
-                  style={{ minWidth: column.width }} // ✅ apply defined width
+                  style={{ minWidth: column.width }}
                   sx={{ fontWeight: 'bold' }}
                 >
                   {column.label}
@@ -94,23 +149,25 @@ export default function StickyHeadTable() {
               ))}
             </TableRow>
           </TableHead>
+
           <TableBody>
-            {pagedRows.map((row, localIdx) => {
-              const globalIdx = page * rowsPerPage + localIdx;
-              const compositeKey = `${row.itemCode}|${row.description}|${globalIdx}`; // ✅ unique even if itemCode duplicates
+            {pagedRows.map((row, idx) => {
+              const key = rowKey(row);
+              const compositeKey = `${key}|${page}-${idx}`; // stable + page index
+
               return (
                 <TableRow hover tabIndex={-1} key={compositeKey}>
                   {columns.map((column) => {
                     const value = row[column.id];
 
                     if (column.id === 'quantity') {
-                      const qtyVal = quantities[globalIdx] ?? 0;
+                      const qtyVal = quantities[key] ?? 0;
                       return (
                         <TableCell key={`${compositeKey}-${column.id}`} align={column.align}>
                           <TextField
                             value={qtyVal}
-                            onChange={handleQtyChange(globalIdx)}
-                            onBlur={handleQtyBlur(globalIdx)}
+                            onChange={handleQtyChange(key)}
+                            onBlur={handleQtyBlur(key)}
                             onWheel={preventWheelChange}
                             size="small"
                             type="number"
@@ -132,13 +189,22 @@ export default function StickyHeadTable() {
                 </TableRow>
               );
             })}
+
+            {pagedRows.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={columns.length}>
+                  No results found{search ? ` for “${search}”` : ''}.
+                </TableCell>
+              </TableRow>
+            )}
           </TableBody>
         </Table>
       </TableContainer>
+
       <TablePagination
         rowsPerPageOptions={[10, 25, 100]}
         component="div"
-        count={rows.length}
+        count={filtered.length}
         rowsPerPage={rowsPerPage}
         page={page}
         onPageChange={handleChangePage}
