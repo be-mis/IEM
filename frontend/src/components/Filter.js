@@ -100,7 +100,6 @@ export default function Filter({ onChange }) {
   return (
     <Box component="form" autoComplete="off" sx={{ '& > :not(style)': { width: '100%' } }}>
       <Grid container spacing={3}>
-        {/* Chain */}
         <Grid item xs={12} md={3}>
           <FormControl size="small" fullWidth>
             <InputLabel id="filter-chain">Chain</InputLabel>
