@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import axios from 'axios';
 
 // Set up axios base URL - Updated for network access
-const API_BASE_URL = 'http://192.168.0.138:5000/api';
+const API_BASE_URL = 'http://localhost:5000/api';
 const api = axios.create({
   baseURL: API_BASE_URL,
   timeout: 10000, // 10 second timeout
@@ -285,7 +285,7 @@ export const useInventoryItems = () => {
       if (isConnected) {
         await fetchItems();
       } else {
-        setError('Unable to connect to backend server. Please check if the server is running on http://192.168.0.138:5000');
+        setError('Unable to connect to backend server. Please check if the server is running on http://localhost:5000');
         setLoading(false);
       }
     };
@@ -360,52 +360,5 @@ export const useDashboardStats = () => {
     loading,
     error,
     refetch: fetchStats,
-  };
-};
-
-// Custom hook for categories
-export const useCategories = () => {
-  const [categories, setCategories] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-
-  const fetchCategories = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      console.log('Fetching categories...');
-      
-      const response = await api.get('/inventory/categories');
-      console.log('Fetched categories:', response.data);
-      
-      setCategories(response.data);
-    } catch (err) {
-      console.error('Error fetching categories:', err);
-      setError(err.response?.data?.error || err.message || 'Failed to fetch categories');
-      
-      // Set default categories on error
-      setCategories([
-        { id: 1, name: 'Desktop' },
-        { id: 2, name: 'Laptop' },
-        { id: 3, name: 'Monitor' },
-        { id: 4, name: 'Network Equipment' },
-        { id: 5, name: 'Mobile Device' },
-        { id: 6, name: 'Accessories' },
-        { id: 7, name: 'Other' },
-      ]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchCategories();
-  }, []);
-
-  return {
-    categories,
-    loading,
-    error,
-    refetch: fetchCategories,
   };
 };

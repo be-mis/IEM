@@ -1,86 +1,120 @@
-import React, { useState } from 'react';
+// src/components/Filter.js
+import React, { useMemo, useState, useEffect } from 'react';
 import {
-  Box, Grid, FormControl, InputLabel, Select, MenuItem
+  Box,
+  Grid,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
 } from '@mui/material';
 
-export default function Filter() {
-  // Independent states
+// ⬇️ Import your hooks that already fetch the lists
+// change the path to wherever your file is (e.g., '../hooks/useFilter')
+import { useChains, useCategories, useStoreClasses } from '../hooks/useFilter';
+
+// Fixed transaction options
+const TRANSACTION_OPTIONS = ['Repeat Order', 'New Item'];
+
+export default function Filter({ onChange }) {
+  // selections
   const [chain, setChain] = useState('');
   const [category, setCategory] = useState('');
   const [storeClass, setStoreClass] = useState('');
   const [transaction, setTransaction] = useState('');
 
-  // --- Mock data: in real app, replace with fetched / dynamic options ---
-  const chainOptions = ['VARIOUS CHAIN', 'SM HOMEWORLD', 'OUR HOME'];
+  // fetched lists (each hook fetches on mount)
+  const { categories,  loading: catLoading, error: catError } = useCategories();
+  const { chains,      loading: chLoading,  error: chError }  = useChains();
+  const { storeClasses, loading: scLoading, error: scError }  = useStoreClasses();
 
-  const categoryOptions = {
-    'VARIOUS CHAIN': ['CLOCKS', 'DECOR', 'FRAMES', 'LAMPS', 'STATIONERY'],
-    'SM HOMEWORLD': ['KITCHEN', 'BEDDING', 'FURNITURE'],
-    'OUR HOME': ['DECOR', 'LIGHTING', 'TABLEWARE'],
-  };
+  const loading = chLoading || catLoading || scLoading;
+  const error   = chError || catError || scError;
 
-  const storeClassOptions = {
-    CLOCKS: ['A STORES', 'B STORES', 'C STORES'],
-    DECOR: ['A STORES', 'B STORES'],
-    FRAMES: ['B STORES', 'C STORES'],
-    LAMPS: ['A STORES', 'C STORES'],
-    STATIONERY: ['C STORES'],
-    KITCHEN: ['A STORES', 'B STORES'],
-    BEDDING: ['A STORES'],
-    FURNITURE: ['A STORES', 'B STORES'],
-    LIGHTING: ['A STORES', 'B STORES'],
-    TABLEWARE: ['A STORES', 'C STORES'],
-  };
+  // Normalize to { value, label } for rendering (with defensive fallbacks)
+  const chainOptions = useMemo(() => {
+    const arr = Array.isArray(chains) ? chains : [];
+    return arr
+      .map(c => {
+        const label = (c?.chainName ?? c?.chainCode ?? '').toString().trim();
+        const value = (c?.chainCode ?? c?.chainName ?? '').toString().trim();
+        if (!label) return null;
+        return { value, label };
+      })
+      .filter(Boolean)
+      .sort((a, b) => (a.label || '').localeCompare(b.label || '', undefined, { sensitivity: 'base' }));
+  }, [chains]);
 
-  const transactionOptions = {
-    'A STORES': ['SALE', 'RETURN', 'TRANSFER'],
-    'B STORES': ['SALE', 'RETURN'],
-    'C STORES': ['SALE'],
-  };
+  const categoryOptions = useMemo(() => {
+    const arr = Array.isArray(categories) ? categories : [];
+    return arr
+      .map(c => {
+        const label = (c?.category ?? c?.catCode).toString().trim();
+        const value = (c?.catCode ?? c?.category ?? '').toString().trim();
+        if (!label) return null;
+        return { value, label };
+      })
+      .filter(Boolean)
+      .sort((a, b) => (a.label || '').localeCompare(b.label || '', undefined, { sensitivity: 'base' }));
+  }, [categories]);
 
-  // --- Handlers ---
+  const storeClassOptions = useMemo(() => {
+    const arr = Array.isArray(storeClasses) ? storeClasses : [];
+    return arr
+      .map(sc => {
+        const label = (sc?.storeClassification ?? sc?.storeClassCode).toString().trim();
+        const value = (sc?.storeClassCode ?? sc?.storeClassification ?? '').toString().trim();
+        if (!label) return null;
+        return { value, label };
+      })
+      .filter(Boolean)
+      .sort((a, b) => (a.label || '').localeCompare(b.label || '', undefined, { sensitivity: 'base' }));
+  }, [storeClasses]);
+
+
+  // Let parent know when something changes (optional)
+  useEffect(() => {
+    if (typeof onChange === 'function') {
+      onChange({ chain, category, storeClass, transaction });
+    }
+  }, [chain, category, storeClass, transaction, onChange]);
+
+  // Handlers
   const handleChainChange = (e) => {
     setChain(e.target.value);
     setCategory('');
     setStoreClass('');
     setTransaction('');
   };
-
   const handleCategoryChange = (e) => {
     setCategory(e.target.value);
     setStoreClass('');
     setTransaction('');
   };
-
   const handleStoreClassChange = (e) => {
     setStoreClass(e.target.value);
     setTransaction('');
   };
-
-  const handleTransactionChange = (e) => {
-    setTransaction(e.target.value);
-  };
-
-  // --- Dynamic filtered options ---
-  const availableCategories = chain ? categoryOptions[chain] || [] : [];
-  const availableStoreClasses = category ? storeClassOptions[category] || [] : [];
-  const availableTransactions = storeClass ? transactionOptions[storeClass] || [] : [];
+  const handleTransactionChange = (e) => setTransaction(e.target.value);
 
   return (
-    <Box component="form" noValidate autoComplete="off" sx={{ '& > :not(style)': { width: '100%' } }}>
+    <Box component="form" autoComplete="off" sx={{ '& > :not(style)': { width: '100%' } }}>
       <Grid container spacing={3}>
         {/* Chain */}
         <Grid item xs={12} md={3}>
-          <FormControl size="small" fullWidth required>
+          <FormControl size="small" fullWidth>
             <InputLabel id="filter-chain">Chain</InputLabel>
             <Select
               labelId="filter-chain"
               value={chain}
               label="Chain"
               onChange={handleChainChange}
+              disabled={loading || !!error || chainOptions.length === 0}
             >
-              {chainOptions.map((c) => (
-                <MenuItem key={c} value={c}>{c}</MenuItem>
+              {loading && <MenuItem disabled>Loading…</MenuItem>}
+              {!loading && error && <MenuItem disabled>{String(error)}</MenuItem>}
+              {!loading && !error && chainOptions.map(o => (
+                <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>
               ))}
             </Select>
           </FormControl>
@@ -88,16 +122,19 @@ export default function Filter() {
 
         {/* Category */}
         <Grid item xs={12} md={3}>
-          <FormControl size="small" fullWidth required disabled={!chain}>
+          <FormControl size="small" fullWidth>
             <InputLabel id="filter-category">Category</InputLabel>
             <Select
               labelId="filter-category"
               value={category}
               label="Category"
               onChange={handleCategoryChange}
+              disabled={loading || !!error || categoryOptions.length === 0 || !chain}
             >
-              {availableCategories.map((cat) => (
-                <MenuItem key={cat} value={cat}>{cat}</MenuItem>
+              {loading && <MenuItem disabled>Loading…</MenuItem>}
+              {!loading && error && <MenuItem disabled>{String(error)}</MenuItem>}
+              {!loading && !error && categoryOptions.map(o => (
+                <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>
               ))}
             </Select>
           </FormControl>
@@ -105,32 +142,36 @@ export default function Filter() {
 
         {/* Store Classification */}
         <Grid item xs={12} md={3}>
-          <FormControl size="small" fullWidth required disabled={!category}>
+          <FormControl size="small" fullWidth>
             <InputLabel id="filter-store-class">Store Classification</InputLabel>
             <Select
               labelId="filter-store-class"
               value={storeClass}
               label="Store Classification"
               onChange={handleStoreClassChange}
+              disabled={loading || !!error || storeClassOptions.length === 0 || !category}
             >
-              {availableStoreClasses.map((sc) => (
-                <MenuItem key={sc} value={sc}>{sc}</MenuItem>
+              {loading && <MenuItem disabled>Loading…</MenuItem>}
+              {!loading && error && <MenuItem disabled>{String(error)}</MenuItem>}
+              {!loading && !error && storeClassOptions.map(o => (
+                <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>
               ))}
             </Select>
           </FormControl>
         </Grid>
 
-        {/* Transaction */}
+        {/* Transaction (constant) */}
         <Grid item xs={12} md={3}>
-          <FormControl size="small" fullWidth required disabled={!storeClass}>
+          <FormControl size="small" fullWidth>
             <InputLabel id="filter-transaction">Transaction Type</InputLabel>
             <Select
               labelId="filter-transaction"
               value={transaction}
               label="Transaction Type"
               onChange={handleTransactionChange}
+              disabled={!storeClass}
             >
-              {availableTransactions.map((tx) => (
+              {TRANSACTION_OPTIONS.map(tx => (
                 <MenuItem key={tx} value={tx}>{tx}</MenuItem>
               ))}
             </Select>

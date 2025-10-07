@@ -4,6 +4,7 @@ const cors = require('cors');
 const { connectDatabase, initializeDatabase } = require('./config/database');
 const inventoryRoutes = require('./routes/inventory');
 const authRoutes = require('./routes/auth');
+const filtersRoutes = require('./routes/filters');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -42,6 +43,10 @@ app.get('/health', (req, res) => {
 // API Routes
 app.use('/api/inventory', inventoryRoutes);
 app.use('/api/auth', authRoutes);
+app.use('/api/inventory', inventoryRoutes);
+app.use('/api/auth', authRoutes);
+app.use('/api/filters', filtersRoutes);
+
 
 // Root endpoint
 app.get('/', (req, res) => {
@@ -52,7 +57,8 @@ app.get('/', (req, res) => {
     endpoints: {
       health: '/health',
       inventory: '/api/inventory/*',
-      auth: '/api/auth/*'
+      auth: '/api/auth/*',
+      filters: '/api/filters/*'
     }
   });
 });
@@ -115,7 +121,10 @@ app.use('*', (req, res) => {
       'GET /api/inventory/stats',
       'POST /api/inventory/items',
       'PUT /api/inventory/items/:id',
-      'DELETE /api/inventory/items/:id'
+      'DELETE /api/inventory/items/:id',
+      'GET /api/filters/categories',     
+      'GET /api/filters/chains',         
+      'GET /api/filters/store-classes'
     ]
   });
 });

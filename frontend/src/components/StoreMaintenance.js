@@ -13,8 +13,8 @@ import Filter from '../components/Filter';
 
 const columns = [
   { id: 'select', label: '', minWidth: 50 },
-  { id: 'branchCode', label: 'Branch Code', minWidth: 180 },
-  { id: 'branchName', label: 'Branch Name', minWidth: 220 },
+  { id: 'branchCode', label: 'Branch Code', minWidth: 200 },
+  { id: 'branchName', label: 'Branch Name', minWidth: 600 },
   { id: 'action', label: 'Action', minWidth: 120 },
 ];
 
@@ -228,7 +228,7 @@ export default function StoreMaintenance() {
                         </TableCell>
                         <TableCell>{row.branchCode}</TableCell>
                         <TableCell>{row.branchName}</TableCell>
-                        <TableCell align="center">
+                        <TableCell>
                           <Tooltip title="Delete branch">
                             <IconButton
                               color="error"

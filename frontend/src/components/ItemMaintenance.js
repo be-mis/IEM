@@ -15,7 +15,7 @@ const columns = [
   { id: 'select', label: '', width: 50 },
   { id: 'itemCode', label: 'Item Code', width: 200 },
   { id: 'description', label: 'Description', width: 600 },
-  { id: 'quantity', label: 'Quantity', width: 200 },
+  // { id: 'quantity', label: 'Quantity', width: 200 },
   { id: 'action', label: 'Action', width: 120 }
 ];
 
@@ -251,7 +251,7 @@ export default function ItemMaintenance() {
                     </TableCell>
                     <TableCell>{row.itemCode}</TableCell>
                     <TableCell>{row.description}</TableCell>
-                    <TableCell>
+                    {/* <TableCell>
                       <TextField
                         value={quantities[key] ?? 0}
                         onChange={handleQtyChange(key)}
@@ -262,8 +262,8 @@ export default function ItemMaintenance() {
                         inputProps={{ min: 0, step: 1 }}
                         fullWidth
                       />
-                    </TableCell>
-                    <TableCell align="center">
+                    </TableCell> */}
+                    <TableCell>
                       <Tooltip title="Delete item">
                         <IconButton color="error" onClick={() => handleOpenDialog(row)}>
                           <DeleteForeverIcon />

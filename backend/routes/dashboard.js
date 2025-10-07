@@ -10,8 +10,8 @@ router.get('/stats', async (req, res) => {
     const pool = getPool();
     
     // Get total items
-    const [totalResult] = await pool.execute('SELECT COUNT(*) as total FROM inventory_items');
-    const totalItems = totalResult[0].total;
+    // const [totalResult] = await pool.execute('SELECT COUNT(*) as total FROM inventory_items');
+    // const totalItems = totalResult[0].total;
     
     // Get available items
     const [availableResult] = await pool.execute('SELECT COUNT(*) as available FROM inventory_items WHERE status = ?', ['available']);
