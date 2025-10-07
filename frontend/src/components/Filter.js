@@ -1,104 +1,162 @@
 // src/components/Filter.js
-import React, { useMemo, useState, useEffect } from 'react';
-import {
-  Box,
-  Grid,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-} from '@mui/material';
-
-// ⬇️ Import your hooks that already fetch the lists
-// change the path to wherever your file is (e.g., '../hooks/useFilter')
+import React, { useMemo, useState, useEffect, useCallback } from 'react';
+import { Box, Grid, FormControl, InputLabel, Select, MenuItem } from '@mui/material';
 import { useChains, useCategories, useStoreClasses } from '../hooks/useFilter';
 
-// Fixed transaction options
 const TRANSACTION_OPTIONS = ['Repeat Order', 'New Item'];
 
-export default function Filter({ onChange }) {
-  // selections
+export default function Filter({ onChange, asForm = false }) {
   const [chain, setChain] = useState('');
   const [category, setCategory] = useState('');
   const [storeClass, setStoreClass] = useState('');
   const [transaction, setTransaction] = useState('');
 
-  // fetched lists (each hook fetches on mount)
-  const { categories,  loading: catLoading, error: catError } = useCategories();
-  const { chains,      loading: chLoading,  error: chError }  = useChains();
-  const { storeClasses, loading: scLoading, error: scError }  = useStoreClasses();
+  const { categories, loading: catLoading, error: catError } = useCategories();
+  const { chains, loading: chLoading, error: chError } = useChains();
+  const { storeClasses, loading: scLoading, error: scError } = useStoreClasses();
 
   const loading = chLoading || catLoading || scLoading;
-  const error   = chError || catError || scError;
+  const error = chError || catError || scError;
 
-  // Normalize to { value, label } for rendering (with defensive fallbacks)
   const chainOptions = useMemo(() => {
     const arr = Array.isArray(chains) ? chains : [];
     return arr
-      .map(c => {
+      .map((c) => {
         const label = (c?.chainName ?? c?.chainCode ?? '').toString().trim();
         const value = (c?.chainCode ?? c?.chainName ?? '').toString().trim();
         if (!label) return null;
         return { value, label };
       })
       .filter(Boolean)
-      .sort((a, b) => (a.label || '').localeCompare(b.label || '', undefined, { sensitivity: 'base' }));
+      .sort((a, b) =>
+        (a.label || '').localeCompare(a.label ? b.label : '', undefined, { sensitivity: 'base' })
+      );
   }, [chains]);
 
   const categoryOptions = useMemo(() => {
     const arr = Array.isArray(categories) ? categories : [];
     return arr
-      .map(c => {
-        const label = (c?.category ?? c?.catCode).toString().trim();
+      .map((c) => {
+        const label = (c?.category ?? c?.catCode ?? '').toString().trim(); // ✅ safe default
         const value = (c?.catCode ?? c?.category ?? '').toString().trim();
         if (!label) return null;
         return { value, label };
       })
       .filter(Boolean)
-      .sort((a, b) => (a.label || '').localeCompare(b.label || '', undefined, { sensitivity: 'base' }));
+      .sort((a, b) =>
+        (a.label || '').localeCompare(b.label || '', undefined, { sensitivity: 'base' })
+      );
   }, [categories]);
 
   const storeClassOptions = useMemo(() => {
     const arr = Array.isArray(storeClasses) ? storeClasses : [];
     return arr
-      .map(sc => {
-        const label = (sc?.storeClassification ?? sc?.storeClassCode).toString().trim();
+      .map((sc) => {
+        const label = (sc?.storeClassification ?? sc?.storeClassCode ?? '').toString().trim(); // ✅ safe default
         const value = (sc?.storeClassCode ?? sc?.storeClassification ?? '').toString().trim();
         if (!label) return null;
         return { value, label };
       })
       .filter(Boolean)
-      .sort((a, b) => (a.label || '').localeCompare(b.label || '', undefined, { sensitivity: 'base' }));
+      .sort((a, b) =>
+        (a.label || '').localeCompare(b.label || '', undefined, { sensitivity: 'base' })
+      );
   }, [storeClasses]);
 
-
-  // Let parent know when something changes (optional)
+  // Notify parent
   useEffect(() => {
     if (typeof onChange === 'function') {
       onChange({ chain, category, storeClass, transaction });
     }
   }, [chain, category, storeClass, transaction, onChange]);
 
-  // Handlers
-  const handleChainChange = (e) => {
+  // ✅ Auto-clear invalid selections if options change underneath
+  useEffect(() => {
+    if (chain && !chainOptions.some((o) => o.value === chain)) {
+      setChain('');
+      setCategory('');
+      setStoreClass('');
+      setTransaction('');
+    }
+  }, [chain, chainOptions]);
+
+  useEffect(() => {
+    if (category && !categoryOptions.some((o) => o.value === category)) {
+      setCategory('');
+      setStoreClass('');
+      setTransaction('');
+    }
+  }, [category, categoryOptions]);
+
+  useEffect(() => {
+    if (storeClass && !storeClassOptions.some((o) => o.value === storeClass)) {
+      setStoreClass('');
+      setTransaction('');
+    }
+  }, [storeClass, storeClassOptions]);
+
+  const handleChainChange = useCallback((e) => {
     setChain(e.target.value);
     setCategory('');
     setStoreClass('');
     setTransaction('');
-  };
-  const handleCategoryChange = (e) => {
+  }, []);
+
+  const handleCategoryChange = useCallback((e) => {
     setCategory(e.target.value);
     setStoreClass('');
     setTransaction('');
-  };
-  const handleStoreClassChange = (e) => {
+  }, []);
+
+  const handleStoreClassChange = useCallback((e) => {
     setStoreClass(e.target.value);
     setTransaction('');
-  };
-  const handleTransactionChange = (e) => setTransaction(e.target.value);
+  }, []);
 
+  const handleTransactionChange = useCallback(
+    (e) => {
+      const nextTx = e.target.value;
+      setTransaction(nextTx);
+
+      const labelFor = (options, value) =>
+        options.find((o) => o.value === value)?.label ?? value ?? '';
+
+      const chainLabel = labelFor(chainOptions, chain) || '(none)';
+      const categoryLabel = labelFor(categoryOptions, category) || '(none)';
+      const storeClassLabel = labelFor(storeClassOptions, storeClass) || '(none)';
+
+      console.log(
+        '[FILTER SELECTION]',
+        '\n  Chain:            ',
+        chain,
+        '→',
+        chainLabel,
+        '\n  Category:         ',
+        category,
+        '→',
+        categoryLabel,
+        '\n  Store Classification:',
+        storeClass,
+        '→',
+        storeClassLabel,
+        '\n  Transaction:      ',
+        nextTx
+      );
+    },
+    [chain, category, storeClass, chainOptions, categoryOptions, storeClassOptions]
+  );
+
+  // Small helper for placeholders
+  const PlaceholderItem = ({ text }) => (
+    <MenuItem value="" disabled>
+      {text}
+    </MenuItem>
+  );
+
+  const WrapperTag = asForm ? 'form' : 'div';
+  
   return (
-    <Box component="form" autoComplete="off" sx={{ '& > :not(style)': { width: '100%' } }}>
+    <Box component="div" autoComplete="off" sx={{ '& > :not(style)': { width: '100%' } }}>
       <Grid container spacing={3}>
         <Grid item xs={12} md={3}>
           <FormControl size="small" fullWidth>
@@ -109,17 +167,22 @@ export default function Filter({ onChange }) {
               label="Chain"
               onChange={handleChainChange}
               disabled={loading || !!error || chainOptions.length === 0}
+              renderValue={(v) => (v ? chainOptions.find((o) => o.value === v)?.label : '— Select Chain —')}
             >
+              <PlaceholderItem text="— Select Chain —" />
               {loading && <MenuItem disabled>Loading…</MenuItem>}
               {!loading && error && <MenuItem disabled>{String(error)}</MenuItem>}
-              {!loading && !error && chainOptions.map(o => (
-                <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>
-              ))}
+              {!loading &&
+                !error &&
+                chainOptions.map((o) => (
+                  <MenuItem key={o.value} value={o.value}>
+                    {o.label}
+                  </MenuItem>
+                ))}
             </Select>
           </FormControl>
         </Grid>
 
-        {/* Category */}
         <Grid item xs={12} md={3}>
           <FormControl size="small" fullWidth>
             <InputLabel id="filter-category">Category</InputLabel>
@@ -129,17 +192,24 @@ export default function Filter({ onChange }) {
               label="Category"
               onChange={handleCategoryChange}
               disabled={loading || !!error || categoryOptions.length === 0 || !chain}
+              renderValue={(v) =>
+                v ? categoryOptions.find((o) => o.value === v)?.label : '— Select Category —'
+              }
             >
+              <PlaceholderItem text="— Select Category —" />
               {loading && <MenuItem disabled>Loading…</MenuItem>}
               {!loading && error && <MenuItem disabled>{String(error)}</MenuItem>}
-              {!loading && !error && categoryOptions.map(o => (
-                <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>
-              ))}
+              {!loading &&
+                !error &&
+                categoryOptions.map((o) => (
+                  <MenuItem key={o.value} value={o.value}>
+                    {o.label}
+                  </MenuItem>
+                ))}
             </Select>
           </FormControl>
         </Grid>
 
-        {/* Store Classification */}
         <Grid item xs={12} md={3}>
           <FormControl size="small" fullWidth>
             <InputLabel id="filter-store-class">Store Classification</InputLabel>
@@ -149,17 +219,24 @@ export default function Filter({ onChange }) {
               label="Store Classification"
               onChange={handleStoreClassChange}
               disabled={loading || !!error || storeClassOptions.length === 0 || !category}
+              renderValue={(v) =>
+                v ? storeClassOptions.find((o) => o.value === v)?.label : '— Select Store Class —'
+              }
             >
+              <PlaceholderItem text="— Select Store Class —" />
               {loading && <MenuItem disabled>Loading…</MenuItem>}
               {!loading && error && <MenuItem disabled>{String(error)}</MenuItem>}
-              {!loading && !error && storeClassOptions.map(o => (
-                <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>
-              ))}
+              {!loading &&
+                !error &&
+                storeClassOptions.map((o) => (
+                  <MenuItem key={o.value} value={o.value}>
+                    {o.label}
+                  </MenuItem>
+                ))}
             </Select>
           </FormControl>
         </Grid>
 
-        {/* Transaction (constant) */}
         <Grid item xs={12} md={3}>
           <FormControl size="small" fullWidth>
             <InputLabel id="filter-transaction">Transaction Type</InputLabel>
@@ -169,9 +246,13 @@ export default function Filter({ onChange }) {
               label="Transaction Type"
               onChange={handleTransactionChange}
               disabled={!storeClass}
+              renderValue={(v) => (v ? v : '— Select Transaction —')}
             >
-              {TRANSACTION_OPTIONS.map(tx => (
-                <MenuItem key={tx} value={tx}>{tx}</MenuItem>
+              <PlaceholderItem text="— Select Transaction —" />
+              {TRANSACTION_OPTIONS.map((tx) => (
+                <MenuItem key={tx} value={tx}>
+                  {tx}
+                </MenuItem>
               ))}
             </Select>
           </FormControl>
