@@ -11,13 +11,12 @@ const PORT = process.env.PORT || 5000;
 const HOST = '0.0.0.0'; // Listen on all network interfaces
 
 // Middleware - Updated CORS to allow your network IP
+const allowed = new RegExp(/^http:\/\/(localhost|127\.0\.0\.1|192\.168\.0\.\d+):3000$/);
 app.use(cors({
-  origin: [
-    'http://localhost:3000', 
-    'http://127.0.0.1:3000',
-    'http://192.168.0.138:3000', // Your network IP
-    'http://192.168.0.*:3000'    // Allow any device on your subnet
-  ],
+  origin: (origin, cb) => {
+    if (!origin || allowed.test(origin)) return cb(null, true);
+    cb(new Error('Not allowed by CORS: ' + origin));
+  },
   credentials: true
 }));
 
@@ -41,8 +40,6 @@ app.get('/health', (req, res) => {
 });
 
 // API Routes
-app.use('/api/inventory', inventoryRoutes);
-app.use('/api/auth', authRoutes);
 app.use('/api/inventory', inventoryRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/filters', filtersRoutes);

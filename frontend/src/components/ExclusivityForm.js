@@ -64,7 +64,8 @@ const SectionHeader = ({ children, sx }) => (
 );
 
 export default function ColorTextFields() {
-    
+    const [selected, setSelected] = useState({ chain: '', category: '', storeClass: '' });
+
     const [selectedChain, setChain] = React.useState('');
   
     const handleChangeChain = (event) => {
@@ -73,9 +74,12 @@ export default function ColorTextFields() {
     
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 4 }} >
-            <Box component="form" noValidate autoComplete="off" >               
-                            <SectionHeader sx={{mb: 2}}><TuneOutlined />Parameter</SectionHeader>
-                <Filter />
+            <Box>
+                            <Filter
+                              onChange={({ chain, category, storeClass }) => {
+                                setSelected({ chain, category, storeClass });
+                              }}
+                            />
             </Box>
             <Box>
                 <Grid container spacing={3}>
@@ -87,10 +91,15 @@ export default function ColorTextFields() {
                             id="panel1-header"
                             sx={{ backgroundColor: '#f5f5f5' }}
                             >
-                                <SectionHeader><StoreMallDirectoryOutlined/>List of Branches</SectionHeader>
+                              <SectionHeader><StoreMallDirectoryOutlined/>List of Branches</SectionHeader>
                             </AccordionSummary>
                             <AccordionDetails>
-                                <ListOfBranch />
+                            <div style={{ marginTop: 16 }}>
+                              <ListOfBranch filters={selected} />
+                            </div>
+
+
+                              {/* <ListOfBranch filters={selected} /> */}
                             </AccordionDetails>
                         </Accordion>
                     </Grid>

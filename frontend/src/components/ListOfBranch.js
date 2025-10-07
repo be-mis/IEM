@@ -13,7 +13,7 @@ import InputAdornment from '@mui/material/InputAdornment';
 import IconButton from '@mui/material/IconButton';
 import SearchIcon from '@mui/icons-material/Search';
 import ClearIcon from '@mui/icons-material/Clear';
-
+import { useBranches } from '../hooks/useBranches';
 // Columns (align with ListOfItems style)
 const columns = [
   { id: 'branchCode', label: 'Branch Code', minWidth: 180 },
@@ -21,29 +21,32 @@ const columns = [
 ];
 
 // Sample rows; keep your real data shape the same
-const rows = [
-  { branchCode: 'C-RDS001', branchName: 'Robinson Dept Store 1' },
-  { branchCode: 'C-RDS002', branchName: 'Robinson Dept Store 2' },
-  { branchCode: 'C-RDS003', branchName: 'Robinson Dept Store 3' },
-  { branchCode: 'C-RDS004', branchName: 'Robinson Dept Store 4' },
-  { branchCode: 'C-RDS005', branchName: 'Robinson Dept Store 5' },
-  { branchCode: 'C-RDS006', branchName: 'Robinson Dept Store 6' },
-  { branchCode: 'C-RDS007', branchName: 'Robinson Dept Store 7' },
-  { branchCode: 'C-RDS008', branchName: 'Robinson Dept Store 8' },
-  { branchCode: 'C-RDS009', branchName: 'Robinson Dept Store 9' },
-  { branchCode: 'C-RDS0010', branchName: 'Robinson Dept Store 10' },
-  { branchCode: 'C-RDS0011', branchName: 'Robinson Dept Store 11' },
-  { branchCode: 'C-RDS0012', branchName: 'Robinson Dept Store 12' },
-  { branchCode: 'C-RDS0013', branchName: 'Robinson Dept Store 13' },
-  { branchCode: 'C-RDS0014', branchName: 'Robinson Dept Store 14' },
-  { branchCode: 'C-RDS0015', branchName: 'Robinson Dept Store 15' },
-  { branchCode: 'C-RDS0016', branchName: 'Robinson Dept Store 16' },
-  { branchCode: 'C-RDS0017', branchName: 'Robinson Dept Store 17' },
-  { branchCode: 'C-RDS0018', branchName: 'Robinson Dept Store 18' },
-  { branchCode: 'C-RDS0019', branchName: 'Robinson Dept Store 19' },
-];
+// const rows = [
+//   { branchCode: 'C-RDS001', branchName: 'Robinson Dept Store 1' },
+//   { branchCode: 'C-RDS002', branchName: 'Robinson Dept Store 2' },
+//   { branchCode: 'C-RDS003', branchName: 'Robinson Dept Store 3' },
+//   { branchCode: 'C-RDS004', branchName: 'Robinson Dept Store 4' },
+//   { branchCode: 'C-RDS005', branchName: 'Robinson Dept Store 5' },
+//   { branchCode: 'C-RDS006', branchName: 'Robinson Dept Store 6' },
+//   { branchCode: 'C-RDS007', branchName: 'Robinson Dept Store 7' },
+//   { branchCode: 'C-RDS008', branchName: 'Robinson Dept Store 8' },
+//   { branchCode: 'C-RDS009', branchName: 'Robinson Dept Store 9' },
+//   { branchCode: 'C-RDS0010', branchName: 'Robinson Dept Store 10' },
+//   { branchCode: 'C-RDS0011', branchName: 'Robinson Dept Store 11' },
+//   { branchCode: 'C-RDS0012', branchName: 'Robinson Dept Store 12' },
+//   { branchCode: 'C-RDS0013', branchName: 'Robinson Dept Store 13' },
+//   { branchCode: 'C-RDS0014', branchName: 'Robinson Dept Store 14' },
+//   { branchCode: 'C-RDS0015', branchName: 'Robinson Dept Store 15' },
+//   { branchCode: 'C-RDS0016', branchName: 'Robinson Dept Store 16' },
+//   { branchCode: 'C-RDS0017', branchName: 'Robinson Dept Store 17' },
+//   { branchCode: 'C-RDS0018', branchName: 'Robinson Dept Store 18' },
+//   { branchCode: 'C-RDS0019', branchName: 'Robinson Dept Store 19' },
+// ];
 
-export default function StickyHeadTable() {
+export default function StickyHeadTable({ filters }) {
+
+  const { branches, loading, error } = useBranches(filters);
+
   // Search text
   const [search, setSearch] = React.useState('');
   // Pagination
@@ -53,13 +56,14 @@ export default function StickyHeadTable() {
   // Filter rows based on search (branch code or name)
   const filtered = React.useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return rows;
-    return rows.filter(
-      r =>
-        r.branchCode.toLowerCase().includes(q) ||
-        r.branchName.toLowerCase().includes(q)
+    const source = Array.isArray(branches) ? branches : [];
+
+    if (!q) return source;
+    return source.filter(r =>
+        (r.branchCode || '').toLowerCase().includes(q) ||
+        (r.branchName || '').toLowerCase().includes(q)
     );
-  }, [search]);
+  }, [search, branches]);
 
   // Slice for pagination AFTER filtering
   const pagedRows = React.useMemo(
@@ -109,6 +113,10 @@ export default function StickyHeadTable() {
           }}
         />
       </Box>
+
+      {/* Loading / Error states */}
+      {loading && <Box sx={{ px: 2, pb: 1 }}>Loading branches…</Box>}
+      {error && !loading && <Box sx={{ px: 2, pb: 1, color: 'error.main' }}>{String(error)}</Box>}
 
       <TableContainer sx={{ height: 560 }}>
         <Table stickyHeader aria-label="branches table">

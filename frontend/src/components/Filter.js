@@ -125,23 +125,23 @@ export default function Filter({ onChange, asForm = false }) {
       const categoryLabel = labelFor(categoryOptions, category) || '(none)';
       const storeClassLabel = labelFor(storeClassOptions, storeClass) || '(none)';
 
-      console.log(
-        '[FILTER SELECTION]',
-        '\n  Chain:            ',
-        chain,
-        '→',
-        chainLabel,
-        '\n  Category:         ',
-        category,
-        '→',
-        categoryLabel,
-        '\n  Store Classification:',
-        storeClass,
-        '→',
-        storeClassLabel,
-        '\n  Transaction:      ',
-        nextTx
-      );
+      // console.log(
+      //   '[FILTER SELECTION]',
+      //   '\n  Chain:            ',
+      //   chain,
+      //   '→',
+      //   chainLabel,
+      //   '\n  Category:         ',
+      //   category,
+      //   '→',
+      //   categoryLabel,
+      //   '\n  Store Classification:',
+      //   storeClass,
+      //   '→',
+      //   storeClassLabel,
+      //   '\n  Transaction:      ',
+      //   nextTx
+      // );
     },
     [chain, category, storeClass, chainOptions, categoryOptions, storeClassOptions]
   );
@@ -154,7 +154,7 @@ export default function Filter({ onChange, asForm = false }) {
   );
 
   const WrapperTag = asForm ? 'form' : 'div';
-  
+
   return (
     <Box component="div" autoComplete="off" sx={{ '& > :not(style)': { width: '100%' } }}>
       <Grid container spacing={3}>

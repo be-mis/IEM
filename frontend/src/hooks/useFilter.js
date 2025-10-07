@@ -12,11 +12,11 @@ const api = axios.create({
 // Add request interceptor for debugging
 api.interceptors.request.use(
   (config) => {
-    console.log(`Making ${config.method?.toUpperCase()} request to: ${config.url}`);
+    // console.log(`Making ${config.method?.toUpperCase()} request to: ${config.url}`);
     return config;
   },
   (error) => {
-    console.error('Request interceptor error:', error);
+    // console.error('Request interceptor error:', error);
     return Promise.reject(error);
   }
 );
@@ -24,16 +24,16 @@ api.interceptors.request.use(
 // Add response interceptor for debugging
 api.interceptors.response.use(
   (response) => {
-    console.log(`Response from ${response.config.url}:`, response.status);
+    // console.log(`Response from ${response.config.url}:`, response.status);
     return response;
   },
   (error) => {
-    console.error('API Response Error:', {
-      url: error.config?.url,
-      status: error.response?.status,
-      data: error.response?.data,
-      message: error.message
-    });
+    // console.error('API Response Error:', {
+    //   url: error.config?.url,
+    //   status: error.response?.status,
+    //   data: error.response?.data,
+    //   message: error.message
+    // });
     return Promise.reject(error);
   }
 );
