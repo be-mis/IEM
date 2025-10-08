@@ -2,6 +2,7 @@
 const express = require('express');
 const router = express.Router();
 const { getPool } = require('../config/database');
+const mysql = require('mysql2'); // for mysql.format()
 
 // GET /api/filters/categories
 router.get('/categories', async (req, res) => {
@@ -52,7 +53,7 @@ router.get('/chains', async (req, res) => {
     const [rows2] = await pool.execute('SELECT DISTINCT chainCode FROM branches ORDER BY chainCode ASC');
     res.json({ items: rows2.map(r => ({ id: null, chainCode: r.chainCode, chainName: r.chainCode })) });
   } catch (err) {
-    console.error('GET /filters/chains error:', err);
+    console.errr('GET /filters/chains error:', err);
     res.status(500).json({ error: 'Failed to fetch chains' });
   }
 });
@@ -82,7 +83,7 @@ router.get('/branches', async (req, res) => {
       return res.status(400).json({ error: `Invalid category. Must be one of: ${Object.keys(validColumns).join(', ')}` });
     }
 
-    console.log(`Fetching branches for chain=${chain}, storeClass=${storeClass}, category=${category} (column: ${columnName})`);
+    console.log('GET /filters/branches', { chain, storeClass, category });
 
     const pool = getPool();
     const query = `
@@ -101,7 +102,6 @@ router.get('/branches', async (req, res) => {
 });
 
 // GET /api/filters/items
-// Builds column from prefix (chain-type) + suffix (store suffix) -> e.g. vChainASEH, sMHASEH, oHASEH
 router.get('/items', async (req, res) => {
   try {
     const { chain, storeClass, category } = req.query;
@@ -126,6 +126,8 @@ router.get('/items', async (req, res) => {
     const prefixKey = String(chain).trim().toLowerCase();
     const suffixKey = String(storeClass).trim().toLowerCase();
 
+    console.log(`Fetching items for chain=${chain} (prefixKey=${prefixKey}), storeClass=${storeClass} (suffixKey=${suffixKey}), category=${category}`);
+
     if (!prefixMap[prefixKey] || !suffixMap[suffixKey]) {
       return res.status(400).json({ error: 'Invalid chain or storeClass. Examples: chain=vChain|sMH|oH and storeClass=ASEH|BSH|CSM|DSS|ESES' });
     }
@@ -134,14 +136,24 @@ router.get('/items', async (req, res) => {
 
     const pool = getPool();
     const query = `
-      SELECT i.id, i.itemCode, i.itemDescription, i.itemCategory
+      SELECT i.itemCode, i.itemDescription, i.itemCategory
       FROM items i
       INNER JOIN item_exclusivity_list e ON e.itemCode = i.itemCode
       WHERE i.itemCategory = ? AND e.${columnName} = 1
       ORDER BY i.itemCode ASC
     `;
-    const [rows] = await pool.execute(query, [String(category).trim()]);
 
+    const params = [String(category).trim()];
+
+    // --- DEBUG: show the fully-interpolated SQL ---
+    const formatted = mysql.format(query, params);
+    console.log('[SQL /filters/items]', formatted);
+    // Optional: expose in a response header so you can see it in the browser Network tab
+    if (process.env.NODE_ENV !== 'production') {
+      const safe = formatted.replace(/[\r\n]+/g, ' ').trim(); // no newlines
+      res.set('X-SQL-Debug', safe.slice(0, 500));
+    }
+    const [rows] = await pool.execute(query, params);
     res.json({ items: rows.map(r => ({ id: r.id, itemCode: r.itemCode, itemDescription: r.itemDescription, itemCategory: r.itemCategory, quantity: 0})) });
   } catch (err) {
     console.error('GET /filters/items error:', err);

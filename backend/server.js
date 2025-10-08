@@ -25,7 +25,7 @@ app.use(express.urlencoded({ extended: true }));
 
 // Request logging middleware
 app.use((req, res, next) => {
-  console.log(`${new Date().toISOString()} - ${req.method} ${req.path} from ${req.ip}`);
+  //console.log(`${new Date().toISOString()} - ${req.method} ${req.path} from ${req.ip}`);
   next();
 });
 
@@ -62,7 +62,7 @@ app.get('/', (req, res) => {
 
 // 404 handler for undefined routes
 app.use('*', (req, res) => {
-  console.log(`❌ Route not found: ${req.method} ${req.originalUrl} from ${req.ip}`);
+  //console.log(`❌ Route not found: ${req.method} ${req.originalUrl} from ${req.ip}`);
   res.status(404).json({ 
     error: 'Route not found',
     path: req.originalUrl,
@@ -85,7 +85,7 @@ app.use('*', (req, res) => {
 
 // Global error handler
 app.use((err, req, res, next) => {
-  console.error('❌ Server Error:', err);
+  //console.error('❌ Server Error:', err);
   res.status(500).json({ 
     error: 'Internal server error',
     message: err.message,
@@ -99,24 +99,24 @@ const startServer = async () => {
   try {
     // Connect to database
     await connectDatabase();
-    console.log('✅ Database connected successfully');
+    //console.log('✅ Database connected successfully');
     
     // Initialize database (create tables, default data)
     await initializeDatabase();
-    console.log('✅ Database initialized successfully');
+    //console.log('✅ Database initialized successfully');
     
     // Start the server on all network interfaces
     app.listen(PORT, HOST, () => {
-      console.log(`🚀 Server running on http://${HOST}:${PORT}`);
-      console.log(`🌐 Network Access: http://192.168.0.138:${PORT}`);
-      console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
-      console.log(`🔗 Local API URL: http://localhost:${PORT}/api`);
-      console.log(`🔗 Network API URL: http://192.168.0.138:${PORT}/api`);
-      console.log(`🏥 Health Check: http://192.168.0.138:${PORT}/health`);
-      console.log(`📱 Officemates can access at: http://192.168.0.138:${PORT}`);
+      //console.log(`🚀 Server running on http://${HOST}:${PORT}`);
+      //console.log(`🌐 Network Access: http://192.168.0.138:${PORT}`);
+      //console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
+      //console.log(`🔗 Local API URL: http://localhost:${PORT}/api`);
+      //console.log(`🔗 Network API URL: http://192.168.0.138:${PORT}/api`);
+      //console.log(`🏥 Health Check: http://192.168.0.138:${PORT}/health`);
+      //console.log(`📱 Officemates can access at: http://192.168.0.138:${PORT}`);
     });
   } catch (error) {
-    console.error('❌ Failed to start server:', error);
+    //console.error('❌ Failed to start server:', error);
     process.exit(1);
   }
 };

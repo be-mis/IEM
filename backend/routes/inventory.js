@@ -100,7 +100,7 @@ router.get('/items', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Error fetching items:', error);
+    //console.error('Error fetching items:', error);
     res.status(500).json({ error: 'Failed to fetch items' });
   }
 });
@@ -163,7 +163,7 @@ router.get('/items/:id', async (req, res) => {
     
     res.json(mappedItem);
   } catch (error) {
-    console.error('Error fetching item:', error);
+    //console.error('Error fetching item:', error);
     res.status(500).json({ error: 'Failed to fetch item' });
   }
 });
@@ -194,7 +194,7 @@ router.put('/items/:id/dispose', async (req, res) => {
       message: 'Item moved to disposal successfully' 
     });
   } catch (error) {
-    console.error('Error moving item to disposal:', error);
+    //console.error('Error moving item to disposal:', error);
     res.status(500).json({ 
       error: 'Failed to move item to disposal',
       message: error.message 
@@ -215,7 +215,7 @@ router.get('/disposal', async (req, res) => {
     
     res.json(rows);
   } catch (error) {
-    console.error('Error fetching disposal items:', error);
+    //console.error('Error fetching disposal items:', error);
     res.status(500).json({ 
       error: 'Failed to fetch disposal items',
       message: error.message 
@@ -229,7 +229,7 @@ router.post('/items/:id/checkout', async (req, res) => {
     const pool = getPool();
     const { id } = req.params;
     
-    console.log('📥 Assignment request body:', req.body);
+    //console.log('📥 Assignment request body:', req.body);
     
     const {
       assigned_to_name, 
@@ -243,7 +243,7 @@ router.post('/items/:id/checkout', async (req, res) => {
     const assignedToName = assigned_to_name || assignedTo;
     
     if (!assignedToName) {
-      console.log('❌ Missing assigned to name');
+      //console.log('❌ Missing assigned to name');
       return res.status(400).json({ error: 'Assigned to name is required' });
     }
     
@@ -278,10 +278,10 @@ router.post('/items/:id/checkout', async (req, res) => {
       SELECT * FROM inventory_items WHERE id = ?
     `, [id]);
     
-    console.log(`✅ Assigned item ID: ${id} to ${assignedToName} (${department || 'No dept'})`);
+    //console.log(`✅ Assigned item ID: ${id} to ${assignedToName} (${department || 'No dept'})`);
     res.json(item[0]);
   } catch (error) {
-    console.error('❌ Error assigning item:', error);
+    //console.error('❌ Error assigning item:', error);
     res.status(500).json({ error: 'Failed to assign item: ' + error.message });
   }
 });

@@ -180,15 +180,15 @@ const Dashboard = () => {
   };
 
   useEffect(() => {
-  // if (!catLoading) console.log('CATEGORIES:', categories);
+  // if (!catLoading) //console.log('CATEGORIES:', categories);
   }, [catLoading, categories]);
 
   useEffect(() => {
-  // if (!chLoading) console.log('CHAINS:', chains);
+  // if (!chLoading) //console.log('CHAINS:', chains);
   }, [chLoading, chains]);
 
   useEffect(() => {
-    // if (!scLoading) console.log('STORE CLASSES:', storeClasses);
+    // if (!scLoading) //console.log('STORE CLASSES:', storeClasses);
   }, [scLoading, storeClasses]);
   
 
@@ -245,7 +245,7 @@ const Dashboard = () => {
       setCurrentView('dashboard');
       showSnackbar('Item added successfully!', 'success');
     } catch (err) {
-      // console.error('Add item error:', err);
+      // //console.error('Add item error:', err);
       showSnackbar('Failed to add item: ' + (err.response?.data?.error || err.message), 'error');
     } finally {
       setLoading(false);

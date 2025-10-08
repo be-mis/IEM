@@ -77,7 +77,7 @@ export default function ExclusivityForm() {
                   List of Items
                 </SectionHeader>
               </AccordionSummary>
-              <AccordionDetails>
+              <AccordionDetails sx={{ maxHeight: 560 }}>
                 <ListOfItems filters={selected} />
               </AccordionDetails>
             </Accordion>
@@ -100,7 +100,7 @@ export default function ExclusivityForm() {
                   Exclusion
                 </SectionHeader>
               </AccordionSummary>
-              <AccordionDetails>
+              <AccordionDetails sx={{ maxHeight: 560 }}>
                 <ListOfExclusion />
               </AccordionDetails>
             </Accordion>

@@ -146,7 +146,7 @@ const ItemDetailsModal = ({ open, onClose, item, onSave, mode = 'view' }) => {
         await onSave(item.id, formData);
         setIsEditing(false);
       } catch (error) {
-        console.error('Error saving item:', error);
+        //console.error('Error saving item:', error);
       } finally {
         setLoading(false);
       }

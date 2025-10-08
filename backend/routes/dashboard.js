@@ -39,7 +39,7 @@ router.get('/stats', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Error fetching dashboard stats:', error);
+    //console.error('Error fetching dashboard stats:', error);
     res.status(500).json({ error: 'Failed to fetch dashboard statistics' });
   }
 });
@@ -65,7 +65,7 @@ router.get('/recent-activity', async (req, res) => {
     
     res.json(activities);
   } catch (error) {
-    console.error('Error fetching recent activity:', error);
+    //console.error('Error fetching recent activity:', error);
     res.status(500).json({ error: 'Failed to fetch recent activity' });
   }
 });
@@ -90,7 +90,7 @@ router.get('/category-breakdown', async (req, res) => {
     
     res.json(breakdown);
   } catch (error) {
-    console.error('Error fetching category breakdown:', error);
+    //console.error('Error fetching category breakdown:', error);
     res.status(500).json({ error: 'Failed to fetch category breakdown' });
   }
 });
@@ -115,7 +115,7 @@ router.get('/low-stock', async (req, res) => {
     
     res.json(lowStock);
   } catch (error) {
-    console.error('Error fetching low stock items:', error);
+    //console.error('Error fetching low stock items:', error);
     res.status(500).json({ error: 'Failed to fetch low stock information' });
   }
 });
@@ -143,7 +143,7 @@ router.get('/assignments-due', async (req, res) => {
     
     res.json(dueItems);
   } catch (error) {
-    console.error('Error fetching assignments due:', error);
+    //console.error('Error fetching assignments due:', error);
     res.status(500).json({ error: 'Failed to fetch assignments due' });
   }
 });
@@ -167,7 +167,7 @@ router.get('/monthly-trends', async (req, res) => {
     
     res.json(trends);
   } catch (error) {
-    console.error('Error fetching monthly trends:', error);
+    //console.error('Error fetching monthly trends:', error);
     res.status(500).json({ error: 'Failed to fetch monthly trends' });
   }
 });
@@ -193,7 +193,7 @@ router.get('/top-users', async (req, res) => {
     
     res.json(topUsers);
   } catch (error) {
-    console.error('Error fetching top users:', error);
+    //console.error('Error fetching top users:', error);
     res.status(500).json({ error: 'Failed to fetch top users' });
   }
 });

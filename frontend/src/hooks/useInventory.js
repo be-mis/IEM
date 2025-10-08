@@ -12,11 +12,11 @@ const api = axios.create({
 // Add request interceptor for debugging
 api.interceptors.request.use(
   (config) => {
-    console.log(`Making ${config.method?.toUpperCase()} request to: ${config.url}`);
+    //console.log(`Making ${config.method?.toUpperCase()} request to: ${config.url}`);
     return config;
   },
   (error) => {
-    console.error('Request interceptor error:', error);
+    //console.error('Request interceptor error:', error);
     return Promise.reject(error);
   }
 );
@@ -24,7 +24,7 @@ api.interceptors.request.use(
 // Add response interceptor for debugging
 api.interceptors.response.use(
   (response) => {
-    console.log(`Response from ${response.config.url}:`, response.status);
+    //console.log(`Response from ${response.config.url}:`, response.status);
     return response;
   },
   (error) => {
@@ -49,7 +49,7 @@ export const useInventoryItems = () => {
     try {
       setLoading(true);
       setError(null);
-      console.log('Fetching items with filters:', filters);
+      //console.log('Fetching items with filters:', filters);
       
       const params = new URLSearchParams();
       if (filters.status) params.append('status', filters.status);
@@ -59,10 +59,10 @@ export const useInventoryItems = () => {
       if (filters.limit) params.append('limit', filters.limit);
       
       const response = await api.get(`/inventory/items?${params.toString()}`);
-      console.log('Fetched items:', response.data);
+      //console.log('Fetched items:', response.data);
       setItems(response.data.items || response.data || []);
     } catch (err) {
-      console.error('Error fetching items:', err);
+      //console.error('Error fetching items:', err);
       setError(err.response?.data?.error || err.message || 'Failed to fetch items');
       setItems([]);
     } finally {
@@ -76,7 +76,7 @@ export const useInventoryItems = () => {
   const addItem = async (itemData) => {
     try {
       setError(null);
-      console.log('Adding item with data:', itemData);
+      //console.log('Adding item with data:', itemData);
       
       // Ensure required fields are present
       if (!itemData.item_name || !itemData.serial_number) {
@@ -106,14 +106,14 @@ export const useInventoryItems = () => {
       };
 
       const response = await api.post('/inventory/items', cleanedData);
-      console.log('Item added successfully:', response.data);
+      //console.log('Item added successfully:', response.data);
       
       // Refresh items after adding
       await fetchItems();
       
       return response.data;
     } catch (err) {
-      console.error('Error adding item:', err);
+      //console.error('Error adding item:', err);
       const errorMessage = err.response?.data?.error || err.message || 'Failed to add item';
       setError(errorMessage);
       throw new Error(errorMessage);
@@ -124,10 +124,10 @@ export const useInventoryItems = () => {
   const updateItem = async (id, updateData) => {
     try {
       setError(null);
-      console.log('Updating item:', id, updateData);
+      //console.log('Updating item:', id, updateData);
       
       const response = await api.put(`/inventory/items/${id}`, updateData);
-      console.log('Item updated successfully:', response.data);
+      //console.log('Item updated successfully:', response.data);
       
       // Update local state
       setItems(prev => prev.map(item => 
@@ -136,7 +136,7 @@ export const useInventoryItems = () => {
       
       return response.data;
     } catch (err) {
-      console.error('Error updating item:', err);
+      //console.error('Error updating item:', err);
       const errorMessage = err.response?.data?.error || err.message || 'Failed to update item';
       setError(errorMessage);
       throw new Error(errorMessage);
@@ -147,17 +147,17 @@ export const useInventoryItems = () => {
   const deleteItem = async (id) => {
     try {
       setError(null);
-      console.log('Deleting item:', id);
+      //console.log('Deleting item:', id);
       
       await api.delete(`/inventory/items/${id}`);
-      console.log('Item deleted successfully');
+      //console.log('Item deleted successfully');
       
       // Remove from local state
       setItems(prev => prev.filter(item => item.id !== id));
       
       return true;
     } catch (err) {
-      console.error('Error deleting item:', err);
+      //console.error('Error deleting item:', err);
       const errorMessage = err.response?.data?.error || err.message || 'Failed to delete item';
       setError(errorMessage);
       throw new Error(errorMessage);
@@ -168,7 +168,7 @@ export const useInventoryItems = () => {
   const checkOutItem = async (id, assignmentData) => {
     try {
       setError(null);
-      console.log('Checking out item:', id, assignmentData);
+      //console.log('Checking out item:', id, assignmentData);
       
       // Validate required assignment data
       const assignedToName = assignmentData.assigned_to_name || assignmentData.assignedTo;
@@ -185,7 +185,7 @@ export const useInventoryItems = () => {
       };
 
       const response = await api.post(`/inventory/items/${id}/checkout`, payload);
-      console.log('Item checked out successfully:', response.data);
+      //console.log('Item checked out successfully:', response.data);
       
       // Update local state
       setItems(prev => prev.map(item => 
@@ -202,7 +202,7 @@ export const useInventoryItems = () => {
       
       return response.data;
     } catch (err) {
-      console.error('Error checking out item:', err);
+      //console.error('Error checking out item:', err);
       const errorMessage = err.response?.data?.error || err.message || 'Failed to assign item';
       setError(errorMessage);
       throw new Error(errorMessage);
@@ -213,7 +213,7 @@ export const useInventoryItems = () => {
   const checkInItem = async (id, returnData) => {
     try {
       setError(null);
-      console.log('Checking in item:', id, returnData);
+      //console.log('Checking in item:', id, returnData);
       
       const payload = {
         return_condition: returnData.condition || 'good',
@@ -221,7 +221,7 @@ export const useInventoryItems = () => {
       };
 
       const response = await api.post(`/inventory/items/${id}/checkin`, payload);
-      console.log('Item checked in successfully:', response.data);
+      //console.log('Item checked in successfully:', response.data);
       
       // Update local state
       setItems(prev => prev.map(item => 
@@ -238,7 +238,7 @@ export const useInventoryItems = () => {
       
       return response.data;
     } catch (err) {
-      console.error('Error checking in item:', err);
+      //console.error('Error checking in item:', err);
       const errorMessage = err.response?.data?.error || err.message || 'Failed to check in item';
       setError(errorMessage);
       throw new Error(errorMessage);
@@ -249,14 +249,14 @@ export const useInventoryItems = () => {
   const getItem = async (id) => {
     try {
       setError(null);
-      console.log('Fetching single item:', id);
+      //console.log('Fetching single item:', id);
       
       const response = await api.get(`/inventory/items/${id}`);
-      console.log('Fetched single item:', response.data);
+      //console.log('Fetched single item:', response.data);
       
       return response.data;
     } catch (err) {
-      console.error('Error fetching item:', err);
+      //console.error('Error fetching item:', err);
       const errorMessage = err.response?.data?.error || err.message || 'Failed to fetch item';
       setError(errorMessage);
       throw new Error(errorMessage);
@@ -266,12 +266,12 @@ export const useInventoryItems = () => {
   // Test connection to backend
   const testConnection = async () => {
     try {
-      console.log('Testing backend connection...');
+      //console.log('Testing backend connection...');
       const response = await api.get('/inventory/stats');
-      console.log('Backend connection successful:', response.data);
+      //console.log('Backend connection successful:', response.data);
       return true;
     } catch (err) {
-      console.error('Backend connection failed:', err);
+      //console.error('Backend connection failed:', err);
       return false;
     }
   };
@@ -279,7 +279,7 @@ export const useInventoryItems = () => {
   // Initial fetch on mount
   useEffect(() => {
     const initializeData = async () => {
-      console.log('Initializing inventory data...');
+      //console.log('Initializing inventory data...');
       const isConnected = await testConnection();
       
       if (isConnected) {
@@ -324,14 +324,14 @@ export const useDashboardStats = () => {
     try {
       setLoading(true);
       setError(null);
-      console.log('Fetching dashboard stats...');
+      //console.log('Fetching dashboard stats...');
       
       const response = await api.get('/inventory/stats');
-      console.log('Fetched stats:', response.data);
+      //console.log('Fetched stats:', response.data);
       
       setStats(response.data);
     } catch (err) {
-      console.error('Error fetching stats:', err);
+      //console.error('Error fetching stats:', err);
       setError(err.response?.data?.error || err.message || 'Failed to fetch statistics');
       
       // Set default stats on error

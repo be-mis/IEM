@@ -162,13 +162,13 @@ const Reports = () => {
         setLoading(false);
       }, 1000);
     } catch (error) {
-      console.error('Error generating report:', error);
+      //console.error('Error generating report:', error);
       setLoading(false);
     }
   };
 
   const handleExportReport = (format) => {
-    console.log(`Exporting report as ${format}`);
+    //console.log(`Exporting report as ${format}`);
     alert(`Report exported as ${format.toUpperCase()}`);
   };
 

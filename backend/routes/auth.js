@@ -54,7 +54,7 @@ router.post('/login', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Login error:', error);
+    //console.error('Login error:', error);
     res.status(500).json({ error: 'Login failed' });
   }
 });
@@ -92,7 +92,7 @@ router.post('/register', async (req, res) => {
       userId: result.insertId 
     });
   } catch (error) {
-    console.error('Registration error:', error);
+    //console.error('Registration error:', error);
     res.status(500).json({ error: 'Registration failed' });
   }
 });
@@ -130,7 +130,7 @@ router.get('/me', authenticateToken, async (req, res) => {
     
     res.json(users[0]);
   } catch (error) {
-    console.error('Get user error:', error);
+    //console.error('Get user error:', error);
     res.status(500).json({ error: 'Failed to get user info' });
   }
 });

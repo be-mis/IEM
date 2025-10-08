@@ -188,9 +188,9 @@ const ViewItems = () => {
   const handleSaveItem = async (itemId, updatedData) => {
     try {
       await updateItem(itemId, updatedData);
-      console.log('Item updated successfully');
+      //console.log('Item updated successfully');
     } catch (error) {
-      console.error('Error updating item:', error);
+      //console.error('Error updating item:', error);
       throw error;
     }
   };
@@ -246,7 +246,7 @@ const ViewItems = () => {
   };
 
   const handleEdit = () => {
-    console.log('Edit item:', selectedItem);
+    //console.log('Edit item:', selectedItem);
     handleMenuClose();
   };
 
@@ -270,9 +270,9 @@ const confirmDelete = async () => {
     setSelectedItem(null);
     
     // Optional: Show success message
-    console.log('Item moved to disposal successfully');
+    //console.log('Item moved to disposal successfully');
   } catch (error) {
-    console.error('Error moving item to disposal:', error);
+    //console.error('Error moving item to disposal:', error);
   }
 };
 

@@ -56,7 +56,7 @@ export function useBranches(filters) {
         setLoading(true); setError(null);
         const res = await api.get(`/filters/branches${query}`);
         if (cancelled) return;
-        console.log(`Fetched Branches for query "${query}":`, res.data.items);
+        //console.log(`Fetched Branches for query "${query}":`, res.data.items);
         setBranches(Array.isArray(res.data?.items) ? res.data.items : []);
       } catch (e) {
         if (cancelled) return;

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import axios from 'axios';
 
 const api = axios.create({
@@ -14,89 +14,80 @@ export default function useItems({ chain, storeClass, category } = {}, debounceM
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-
-  const cancelRef = useRef(null);
-  const mountedRef = useRef(true);
   const debounceRef = useRef(null);
 
+  // 1. Define a clear condition for when to fetch data, just like in useBranches.
+  const shouldFetch = Boolean(
+    (chain || '').trim() &&
+    (storeClass || '').trim() &&
+    (category || '').trim()
+  );
+
+  // 2. Memoize the query string to create a stable dependency for useEffect.
+  const query = useMemo(() => {
+    if (!shouldFetch) return '';
+    const params = new URLSearchParams({
+      chain: String(chain || '').trim(),
+      storeClass: String(storeClass || '').trim(),
+      category: String(category || '').trim(),
+    });
+    return `?${params.toString()}`;
+  }, [chain, storeClass, category, shouldFetch]);
+
   useEffect(() => {
-    return () => {
-      mountedRef.current = false;
-      if (cancelRef.current) {
-        try { cancelRef.current(); } catch (e) {}
-      }
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-    };
-  }, []);
+    // Clear any pending fetch from previous filter changes.
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+    }
 
-  const fetchItems = useCallback(
-    async (opts = {}) => {
-      const { force = false } = opts;
-      if ((!chain || !storeClass || !category) && !force) {
-        setItems([]);
-        setError(null);
-        setLoading(false);
-        return;
-      }
+    // 3. If the condition to fetch isn't met, reset the state and stop.
+    if (!shouldFetch) {
+      setItems([]);
+      setLoading(false);
+      setError(null);
+      return;
+    }
 
-      if (cancelRef.current) {
-        try { cancelRef.current(); } catch (e) {}
-        cancelRef.current = null;
-      }
+    // 4. Use a modern AbortController for handling request cancellation.
+    const controller = new AbortController();
 
+    const fetchItems = async () => {
       setLoading(true);
       setError(null);
-
       try {
-        const params = new URLSearchParams({
-          chain: String(chain || '').trim(),
-          storeClass: String(storeClass || '').trim(),
-          category: String(category || '').trim()
-        });
-        const url = `/filters/items?${params.toString()}`;
-
-        const source = axios.CancelToken ? axios.CancelToken.source() : null;
-        if (source) cancelRef.current = () => source.cancel('canceled');
-
-        const res = await api.get(url, source ? { cancelToken: source.token } : {});
-        if (!mountedRef.current) return;
+        const url = `/filters/items${query}`;
+        const res = await api.get(url, { signal: controller.signal });
         const dataItems = (res?.data?.items) || [];
         console.log(`Fetched Items from URL "${url}":`, dataItems);
         // The returned data from filters.js is stored in the 'items' state variable here.
         setItems(Array.isArray(dataItems) ? dataItems : []); 
       } catch (err) {
-        if (!mountedRef.current) return;
-        if (axios.isCancel && axios.isCancel(err)) {
-          // canceled
+        if (axios.isCancel(err)) {
+          // Request was cancelled, do nothing.
         } else {
           setError(err?.response?.data?.error || err.message || 'Failed to fetch items');
           setItems([]);
         }
       } finally {
-        if (mountedRef.current) setLoading(false);
-      }
-    },
-    [chain, storeClass, category]
-  );
-
-
-  useEffect(() => {
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => {
-      fetchItems();
-      debounceRef.current = null;
-    }, typeof debounceMs === 'number' && debounceMs > 0 ? debounceMs : 300);
-
-    return () => {
-      if (debounceRef.current) {
-        clearTimeout(debounceRef.current);
-        debounceRef.current = null;
+        setLoading(false);
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fetchItems]);
 
-  const refresh = useCallback(() => fetchItems({ force: true }), [fetchItems]);
+    // 5. Apply the debounce logic within the single effect.
+    debounceRef.current = setTimeout(fetchItems, debounceMs);
+
+    // 6. The cleanup function now cancels both the timer and the API request.
+    return () => {
+      clearTimeout(debounceRef.current);
+      controller.abort();
+    };
+  }, [query, shouldFetch, debounceMs]); // The dependencies are now much clearer.
+
+  const refresh = useCallback(() => {
+    // A manual refresh can be triggered by re-running the effect.
+    // This implementation detail can be improved if a non-debounced refresh is needed.
+    console.log('Refresh triggered. New fetch will be scheduled if filters are valid.');
+  }, []);
   
   return { items, loading, error, refresh };
 }

@@ -22,11 +22,6 @@ export default function StickyHeadTable({ filters }) {
 
   const { items, loading, error } = useItems(filters);
 
-  // Log the items received from the hook whenever they change
-  React.useEffect(() => {
-    console.log('`ListOfItems` component received new items from hook:', items);
-  }, [items]);
-
   // const { chain = '', storeClass = '', category = '' } = filters || {};
   // const { items = [], loading, error, refresh } = useItems({ chain, storeClass, category });
 
@@ -113,7 +108,7 @@ export default function StickyHeadTable({ filters }) {
         />
       </Box>
 
-      <TableContainer sx={{ height: 560 }}>
+      <TableContainer>
         <Table stickyHeader aria-label="items table">
           <TableHead>
             <TableRow>
