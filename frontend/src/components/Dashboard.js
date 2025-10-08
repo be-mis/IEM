@@ -196,7 +196,7 @@ const Dashboard = () => {
   const menuItems = [
     { text: 'Exclusivity Form', icon: <DescriptionOutlined />, view: 'exclusivityform' },
     { text: 'Item Maintenance', icon: <Inventory2Outlined />, view: 'itemmaintenance' },
-    { text: 'Store Maintenance', icon: <StoreMallDirectoryOutlined />, view: 'storemaintenance' },
+    { text: 'Branch Maintenance', icon: <StoreMallDirectoryOutlined />, view: 'storemaintenance' },
     // { text: 'View Items', icon: <ViewListIcon />, view: 'view' },
     // { text: 'Assign', icon: <AssignIcon />, view: 'assign' },
     // { text: 'Receive', icon: <ReceiveIcon />, view: 'receive' },
@@ -427,7 +427,7 @@ const Dashboard = () => {
               <Typography variant="h6" sx={{ flexGrow: 1, fontWeight: '700' }}>
                 {currentView === 'exclusivityform' ? 'Exclusivity Form' :
                  currentView === 'itemmaintenance' ? 'Item Maintenance' :
-                 currentView === 'storemaintenance' ? 'Store Maintenance' : 'Dashboard'}
+                 currentView === 'storemaintenance' ? 'Branch Maintenance' : 'Exclusivity Form'}
               </Typography>
             </Toolbar>
           </ModernAppBar>

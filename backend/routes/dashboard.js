@@ -9,25 +9,23 @@ router.get('/stats', async (req, res) => {
   try {
     const pool = getPool();
     
-    // Get total items
-    // const [totalResult] = await pool.execute('SELECT COUNT(*) as total FROM inventory_items');
-    // const totalItems = totalResult[0].total;
-    
-    // Get available items
-    const [availableResult] = await pool.execute('SELECT COUNT(*) as available FROM inventory_items WHERE status = ?', ['available']);
-    const available = availableResult[0].available;
-    
-    // Get assigned items
-    const [assignedResult] = await pool.execute('SELECT COUNT(*) as assigned FROM inventory_items WHERE status = ?', ['assigned']);
-    const assigned = assignedResult[0].assigned;
-    
-    // Get maintenance items
-    const [maintenanceResult] = await pool.execute('SELECT COUNT(*) as maintenance FROM inventory_items WHERE status = ?', ['maintenance']);
-    const maintenance = maintenanceResult[0].maintenance;
-    
-    // Get retired items
-    const [retiredResult] = await pool.execute('SELECT COUNT(*) as retired FROM inventory_items WHERE status = ?', ['retired']);
-    const retired = retiredResult[0].retired;
+    // More efficient query to get all counts in one go
+    const [statsResult] = await pool.execute(`
+      SELECT
+        COUNT(*) AS total,
+        SUM(CASE WHEN status = 'available' THEN 1 ELSE 0 END) AS available,
+        SUM(CASE WHEN status = 'assigned' THEN 1 ELSE 0 END) AS assigned,
+        SUM(CASE WHEN status = 'maintenance' THEN 1 ELSE 0 END) AS maintenance,
+        SUM(CASE WHEN status = 'retired' THEN 1 ELSE 0 END) AS retired
+      FROM inventory_items
+    `);
+
+    const stats = statsResult[0];
+    const totalItems = stats.total || 0;
+    const available = stats.available || 0;
+    const assigned = stats.assigned || 0;
+    const maintenance = stats.maintenance || 0;
+    const retired = stats.retired || 0;
     
     res.json({
       totalItems,

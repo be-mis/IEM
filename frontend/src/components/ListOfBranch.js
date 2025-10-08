@@ -118,7 +118,7 @@ export default function StickyHeadTable({ filters }) {
       {loading && <Box sx={{ px: 2, pb: 1 }}>Loading branches…</Box>}
       {error && !loading && <Box sx={{ px: 2, pb: 1, color: 'error.main' }}>{String(error)}</Box>}
 
-      <TableContainer sx={{ height: 560 }}>
+      <TableContainer>
         <Table stickyHeader aria-label="branches table">
           <TableHead>
             <TableRow>

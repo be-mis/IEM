@@ -75,11 +75,11 @@ export default function ColorTextFields() {
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 4 }} >
             <Box>
-                            <Filter
-                              onChange={({ chain, category, storeClass }) => {
-                                setSelected({ chain, category, storeClass });
-                              }}
-                            />
+              <Filter
+              onChange={({ chain, category, storeClass }) => {
+                setSelected({ chain, category, storeClass });
+              }}
+              />
             </Box>
             <Box>
                 <Grid container spacing={3}>
@@ -93,13 +93,8 @@ export default function ColorTextFields() {
                             >
                               <SectionHeader><StoreMallDirectoryOutlined/>List of Branches</SectionHeader>
                             </AccordionSummary>
-                            <AccordionDetails>
-                            <div style={{ marginTop: 16 }}>
+                            <AccordionDetails sx={{ maxHeight: 560}}>
                               <ListOfBranch filters={selected} />
-                            </div>
-
-
-                              {/* <ListOfBranch filters={selected} /> */}
                             </AccordionDetails>
                         </Accordion>
                     </Grid>

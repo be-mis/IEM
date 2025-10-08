@@ -7,10 +7,10 @@ const { getPool } = require('../config/database');
 router.get('/items', async (req, res) => {
   try {
     const pool = getPool();
-    const { status, category, search, page = 1, limit = 50 } = req.query;
+    const { status, category, search, page = 1, limit = 50, sort_by = 'createdAt', sort_order = 'DESC' } = req.query;
     
-    // FIXED: Include assigned_to and other assignment fields in SELECT
-    let query = `
+    // Base query
+    const baseQuery = `
       SELECT 
         i.id,
         i.item_name,
@@ -22,6 +22,7 @@ router.get('/items', async (req, res) => {
         i.condition,
         i.location,
         i.quantity,
+        i.department,
         i.notes,
         i.assigned_to,
         i.assigned_email,
@@ -30,34 +31,39 @@ router.get('/items', async (req, res) => {
         i.createdAt,
         i.updatedAt
       FROM inventory_items i
-      WHERE 1=1
     `;
     
+    // WHERE clause construction
+    let whereClause = ' WHERE 1=1';
     const params = [];
     
-    // Add filtering conditions
     if (status) {
-      query += ' AND i.status = ?';
+      whereClause += ' AND i.status = ?';
       params.push(status);
     }
     
     if (category) {
-      query += ' AND i.category = ?';
+      whereClause += ' AND i.category = ?';
       params.push(category);
     }
     
     if (search) {
-      query += ' AND (i.item_name LIKE ? OR i.brand LIKE ? OR i.model LIKE ? OR i.serialNumber LIKE ?)';
+      whereClause += ' AND (i.item_name LIKE ? OR i.brand LIKE ? OR i.model LIKE ? OR i.serialNumber LIKE ?)';
       const searchTerm = `%${search}%`;
       params.push(searchTerm, searchTerm, searchTerm, searchTerm);
     }
+
+    // Whitelist sortable columns for security
+    const validSortColumns = ['item_name', 'category', 'status', 'createdAt', 'updatedAt'];
+    const sortBy = validSortColumns.includes(sort_by) ? `i.${sort_by}` : 'i.createdAt';
+    const sortOrder = sort_order.toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
     
-    query += ' ORDER BY i.createdAt DESC LIMIT ? OFFSET ?';
-    params.push(parseInt(limit), (parseInt(page) - 1) * parseInt(limit));
+    // Full query for fetching items with pagination
+    const itemsQuery = `${baseQuery}${whereClause} ORDER BY ${sortBy} ${sortOrder} LIMIT ? OFFSET ?`;
+    const itemsParams = [...params, parseInt(limit), (parseInt(page) - 1) * parseInt(limit)];
     
-    const [items] = await pool.execute(query, params);
+    const [items] = await pool.execute(itemsQuery, itemsParams);
     
-    // FIXED: Map database fields to what frontend expects
     const mappedItems = items.map(item => ({
       id: item.id,
       item_name: item.item_name,
@@ -80,26 +86,8 @@ router.get('/items', async (req, res) => {
     }));
     
     // Get total count for pagination
-    let countQuery = `SELECT COUNT(*) as total FROM inventory_items i WHERE 1=1`;
-    const countParams = [];
-    
-    if (status) {
-      countQuery += ' AND i.status = ?';
-      countParams.push(status);
-    }
-    
-    if (category) {
-      countQuery += ' AND i.category = ?';
-      countParams.push(category);
-    }
-    
-    if (search) {
-      countQuery += ' AND (i.item_name LIKE ? OR i.brand LIKE ? OR i.model LIKE ? OR i.serialNumber LIKE ?)';
-      const searchTerm = `%${search}%`;
-      countParams.push(searchTerm, searchTerm, searchTerm, searchTerm);
-    }
-    
-    const [countResult] = await pool.execute(countQuery, countParams);
+    const countQuery = `SELECT COUNT(*) as total FROM inventory_items i${whereClause}`;
+    const [countResult] = await pool.execute(countQuery, params);
     const total = countResult[0].total;
     
     res.json({
@@ -123,7 +111,6 @@ router.get('/items/:id', async (req, res) => {
     const pool = getPool();
     const { id } = req.params;
     
-    // FIXED: Include assigned_to and other assignment fields
     const [items] = await pool.execute(`
       SELECT 
         i.id,
@@ -136,6 +123,7 @@ router.get('/items/:id', async (req, res) => {
         i.condition,
         i.location,
         i.quantity,
+        i.department,
         i.notes,
         i.assigned_to,
         i.assigned_email,
@@ -151,7 +139,6 @@ router.get('/items/:id', async (req, res) => {
       return res.status(404).json({ error: 'Item not found' });
     }
     
-    // FIXED: Map database fields to what frontend expects
     const item = items[0];
     const mappedItem = {
       id: item.id,
@@ -166,6 +153,7 @@ router.get('/items/:id', async (req, res) => {
       quantity: item.quantity,
       notes: item.notes,
       assigned_to: item.assigned_to || null,           // ✅ Now properly mapped
+      department: item.department || null,             // ✅ Now properly mapped
       assigned_email: item.assigned_email || null,     // ✅ Add email
       assigned_phone: item.assigned_phone || null,     // ✅ Add phone
       assignment_date: item.assignment_date || null,   // ✅ Add assignment date
@@ -185,7 +173,7 @@ router.put('/items/:id/dispose', async (req, res) => {
     const { id } = req.params;
     const { disposal_reason, disposed_by } = req.body;
     
-    const pool = require('../config/database').getPool();
+    const pool = getPool();
     
     const [result] = await pool.execute(
       `UPDATE inventory_items 
