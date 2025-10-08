@@ -23,12 +23,18 @@ function toQuery(params) {
  * useBranches({ chain, category, storeClass })
  */
 export function useBranches(filters) {
+  // console.log('`useBranches` hook called with filters:', filters);
   const [branches, setBranches] = useState([]);
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState(null);
 
   // only fetch when required filters are present
-  const shouldFetch = Boolean((filters?.chain || '').trim() && (filters?.storeClass || '').trim());
+  // MODIFIED: Only fetch when storeClass and other required filters are selected.
+  const shouldFetch = Boolean(
+    (filters?.chain || '').trim() && 
+    (filters?.storeClass || '').trim() &&
+    (filters?.category || '').trim()
+  );
 
   // Only include non-empty filters in the URL
   const query = useMemo(() => toQuery({
@@ -50,6 +56,7 @@ export function useBranches(filters) {
         setLoading(true); setError(null);
         const res = await api.get(`/filters/branches${query}`);
         if (cancelled) return;
+        console.log(`Fetched Branches for query "${query}":`, res.data.items);
         setBranches(Array.isArray(res.data?.items) ? res.data.items : []);
       } catch (e) {
         if (cancelled) return;

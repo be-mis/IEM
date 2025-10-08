@@ -205,7 +205,7 @@ router.put('/items/:id/dispose', async (req, res) => {
 // Get disposal items
 router.get('/disposal', async (req, res) => {
   try {
-    const pool = require('../config/database').getPool();
+    const pool = getPool();
     
     const [rows] = await pool.execute(
       `SELECT * FROM inventory_items 
@@ -247,20 +247,6 @@ router.post('/items/:id/checkout', async (req, res) => {
       return res.status(400).json({ error: 'Assigned to name is required' });
     }
     
-    // First, add the missing columns if they don't exist
-    try {
-      await pool.execute(`
-        ALTER TABLE inventory_items 
-        ADD COLUMN IF NOT EXISTS assigned_to VARCHAR(255),
-        ADD COLUMN IF NOT EXISTS department VARCHAR(255),
-        ADD COLUMN IF NOT EXISTS assigned_email VARCHAR(255),
-        ADD COLUMN IF NOT EXISTS assigned_phone VARCHAR(50),
-        ADD COLUMN IF NOT EXISTS assignment_date DATETIME
-      `);
-    } catch (alterError) {
-      console.log('Columns may already exist:', alterError.message);
-    }
-    
     // FIXED: Update item with assignment details including department
     const [updateResult] = await pool.execute(`
       UPDATE inventory_items 
@@ -273,14 +259,14 @@ router.post('/items/:id/checkout', async (req, res) => {
           updatedAt = CURRENT_TIMESTAMP
       WHERE id = ? AND status = ?
     `, [
-      'ASSIGNED', 
+      'assigned', 
       assignedToName, 
       department || null,
       email || null, 
       phone || null,
       assignment_date,
       id, 
-      'AVAILABLE'
+      'available'
     ]);
     
     if (updateResult.affectedRows === 0) {

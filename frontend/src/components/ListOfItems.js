@@ -5,6 +5,7 @@ import {
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import ClearIcon from '@mui/icons-material/Clear';
+import useItems from '../hooks/useItems';
 
 const columns = [
   { id: 'itemCode', label: 'Item Code', width: 200 },
@@ -12,48 +13,46 @@ const columns = [
   { id: 'quantity', label: 'Quantity', width: 200 },
 ];
 
-// Slim createData to what you actually use
 function createData(itemCode, description, quantity) {
   return { itemCode, description, quantity };
 }
-
-// Build a stable key for each row (even if itemCode duplicates)
 const rowKey = (r) => `${r.itemCode}|${r.description}`;
 
-const rows = [
-  createData('1016235984723905', 'Classic white cotton T-shirt for everyday wear.', 9),
-  createData('1024578391027456', 'Compact wireless mouse with silent clicks.', 5),
-  createData('1039827564312087', 'Durable stainless steel water bottle, 500 ml.', 12),
-  createData('1047312098456723', 'Portable Bluetooth speaker with deep bass.', 7),
-  createData('1056743210985674', 'Soft microfiber towel, quick-dry and lightweight.', 14),
-  createData('1062039485712348', 'Rechargeable LED desk lamp with touch control.', 6),
-  createData('1078456902134590', 'Leather wallet with multiple card slots.', 10),
-  createData('1089123456702341', 'Slim laptop sleeve fits up to 15-inch devices.', 4),
-  createData('1095634789201576', 'Eco-friendly reusable shopping bag.', 8),
-  createData('1010846235792345', 'Adjustable phone stand for desk or nightstand.', 13),
-  createData('1023987456123987', 'Scented soy candle with calming lavender aroma.', 11),
-  createData('1034567890234561', 'Classic black ballpoint pen with smooth ink flow.', 3),
-  createData('1049871234567812', 'Foldable umbrella with wind-resistant frame.', 15),
-  createData('1052310987654320', 'Travel-sized power bank with fast charging.', 6),
-  createData('1067890123456789', 'Insulated coffee tumbler with spill-proof lid.', 7),
-  createData('1073456789012345', 'Minimalist wristwatch with stainless steel strap.', 2),
-  createData('1088765432109876', 'Soft throw blanket made of plush fleece.', 9),
-  createData('1092345678901234', 'Noise-cancelling over-ear headphones.', 5),
-  createData('1092345678901234', 'Pocket-sized hand sanitizer with refreshing scent.', 4), // duplicate itemCode on purpose
-];
+export default function StickyHeadTable({ filters }) {
 
-export default function StickyHeadTable() {
-  // Search
+  const { items, loading, error } = useItems(filters);
+
+  // Log the items received from the hook whenever they change
+  React.useEffect(() => {
+    console.log('`ListOfItems` component received new items from hook:', items);
+  }, [items]);
+
+  // const { chain = '', storeClass = '', category = '' } = filters || {};
+  // const { items = [], loading, error, refresh } = useItems({ chain, storeClass, category });
+
   const [search, setSearch] = React.useState('');
-
-  // Pagination
   const [page, setPage] = React.useState(0);
   const [rowsPerPage, setRowsPerPage] = React.useState(10);
 
-  // Keep editable quantity values per row, keyed by stable composite key
+  const rows = React.useMemo(() => {
+    if (!Array.isArray(items)) return [];
+    return items.map((it) => createData(it.itemCode, it.itemDescription ?? it.description ?? '', 0));
+  }, [items]);
+
   const [quantities, setQuantities] = React.useState(() =>
-    Object.fromEntries(rows.map((r) => [rowKey(r), Number(r.quantity) ?? 0]))
+    Object.fromEntries(rows.map((r) => {
+      const n = Number(r.quantity);
+      return [rowKey(r), Number.isFinite(n) ? n : 0];
+    }))
   );
+
+  React.useEffect(() => {
+    setQuantities(Object.fromEntries(rows.map((r) => {
+      const n = Number(r.quantity);
+      return [rowKey(r), Number.isFinite(n) ? n : 0];
+    })));
+    setPage(0);
+  }, [rows]);
 
   const handleChangePage = (_event, newPage) => setPage(newPage);
   const handleChangeRowsPerPage = (event) => {
@@ -61,35 +60,27 @@ export default function StickyHeadTable() {
     setPage(0);
   };
 
-  // Filter rows based on search (itemCode or description)
   const filtered = React.useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return rows;
-    return rows.filter(
-      (r) =>
-        r.itemCode.toLowerCase().includes(q) ||
-        r.description.toLowerCase().includes(q)
+    return rows.filter((r) =>
+      (r.itemCode || '').toLowerCase().includes(q) ||
+      (r.description || '').toLowerCase().includes(q)
     );
-  }, [search]);
+  }, [search, rows]);
 
-  // Slice for pagination AFTER filtering
   const pagedRows = React.useMemo(
     () => filtered.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage),
     [filtered, page, rowsPerPage]
   );
 
-  // Reset to first page when search changes
-  React.useEffect(() => {
-    setPage(0);
-  }, [search]);
+  React.useEffect(() => { setPage(0); }, [search]);
 
-  // Update as user types; allow empty string temporarily for UX
   const handleQtyChange = (key) => (e) => {
     const val = e.target.value;
     setQuantities((prev) => ({ ...prev, [key]: val === '' ? '' : Number(val) }));
   };
 
-  // Normalize on blur: clamp to >= 0 and integer
   const handleQtyBlur = (key) => () => {
     setQuantities((prev) => {
       let v = prev[key];
@@ -100,33 +91,22 @@ export default function StickyHeadTable() {
   };
 
   const preventWheelChange = (e) => {
-    // Prevent scroll wheel from changing the number while focused
     e.target.blur();
     setTimeout(() => e.target.focus(), 0);
   };
 
   return (
     <Paper sx={{ width: '100%', overflow: 'hidden' }}>
-      {/* Search bar */}
       <Box sx={{ p: 2 }}>
         <TextField
-          fullWidth
-          size="small"
-          label="Search items (code or description)"
+          fullWidth size="small" label="Search items (code or description)"
           placeholder="e.g., 1039… or 'wireless mouse'"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          value={search} onChange={(e) => setSearch(e.target.value)}
           InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <SearchIcon aria-label="search icon" />
-              </InputAdornment>
-            ),
+            startAdornment: (<InputAdornment position="start"><SearchIcon /></InputAdornment>),
             endAdornment: search ? (
               <InputAdornment position="end">
-                <IconButton aria-label="clear search" onClick={() => setSearch('')} edge="end">
-                  <ClearIcon />
-                </IconButton>
+                <IconButton onClick={() => setSearch('')} edge="end"><ClearIcon /></IconButton>
               </InputAdornment>
             ) : null,
           }}
@@ -138,12 +118,7 @@ export default function StickyHeadTable() {
           <TableHead>
             <TableRow>
               {columns.map((column) => (
-                <TableCell
-                  key={column.id}
-                  align={column.align}
-                  style={{ minWidth: column.width }}
-                  sx={{ fontWeight: 'bold' }}
-                >
+                <TableCell key={column.id} style={{ minWidth: column.width }} sx={{ fontWeight: 'bold' }}>
                   {column.label}
                 </TableCell>
               ))}
@@ -151,65 +126,40 @@ export default function StickyHeadTable() {
           </TableHead>
 
           <TableBody>
-            {pagedRows.map((row, idx) => {
+            {loading ? (
+              <TableRow><TableCell colSpan={columns.length}>Loading items…</TableCell></TableRow>
+            ) : error ? (
+              <TableRow><TableCell colSpan={columns.length} style={{ color: 'red' }}>{error}</TableCell></TableRow>
+            ) : pagedRows.map((row, idx) => {
               const key = rowKey(row);
-              const compositeKey = `${key}|${page}-${idx}`; // stable + page index
-
               return (
-                <TableRow hover tabIndex={-1} key={compositeKey}>
+                <TableRow hover tabIndex={-1} key={key}>
                   {columns.map((column) => {
                     const value = row[column.id];
-
                     if (column.id === 'quantity') {
                       const qtyVal = quantities[key] ?? 0;
                       return (
-                        <TableCell key={`${compositeKey}-${column.id}`} align={column.align}>
-                          <TextField
-                            value={qtyVal}
-                            onChange={handleQtyChange(key)}
-                            onBlur={handleQtyBlur(key)}
-                            onWheel={preventWheelChange}
-                            size="small"
-                            type="number"
-                            inputProps={{ min: 0, step: 1 }}
-                            fullWidth
-                            variant="outlined"
-                            placeholder="0"
-                          />
+                        <TableCell key={`${key}-${column.id}`}>
+                          <TextField value={qtyVal} onChange={handleQtyChange(key)} onBlur={handleQtyBlur(key)}
+                            onWheel={preventWheelChange} size="small" type="number" inputProps={{ min: 0, step: 1 }}
+                            fullWidth variant="outlined" placeholder="0" />
                         </TableCell>
                       );
                     }
-
-                    return (
-                      <TableCell key={`${compositeKey}-${column.id}`} align={column.align}>
-                        {value}
-                      </TableCell>
-                    );
+                    return <TableCell key={`${key}-${column.id}`}>{value}</TableCell>;
                   })}
                 </TableRow>
               );
             })}
-
-            {pagedRows.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={columns.length}>
-                  No results found{search ? ` for “${search}”` : ''}.
-                </TableCell>
-              </TableRow>
+            {!loading && pagedRows.length === 0 && (
+              <TableRow><TableCell colSpan={columns.length}>No results found{search ? ` for “${search}”` : ''}.</TableCell></TableRow>
             )}
           </TableBody>
         </Table>
       </TableContainer>
 
-      <TablePagination
-        rowsPerPageOptions={[10, 25, 100]}
-        component="div"
-        count={filtered.length}
-        rowsPerPage={rowsPerPage}
-        page={page}
-        onPageChange={handleChangePage}
-        onRowsPerPageChange={handleChangeRowsPerPage}
-      />
+      <TablePagination rowsPerPageOptions={[10,25,100]} component="div" count={filtered.length}
+        rowsPerPage={rowsPerPage} page={page} onPageChange={handleChangePage} onRowsPerPageChange={handleChangeRowsPerPage} />
     </Paper>
   );
 }

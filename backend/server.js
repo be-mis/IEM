@@ -60,51 +60,6 @@ app.get('/', (req, res) => {
   });
 });
 
-// ADD THIS: Stats endpoint for dashboard
-app.get('/api/inventory/stats', async (req, res) => {
-  try {
-    const pool = require('./config/database').getPool();
-    
-    // Get total count
-    const [totalResult] = await pool.execute('SELECT COUNT(*) as total FROM inventory_items');
-    const totalItems = totalResult[0].total;
-    
-    // Get available count
-    const [availableResult] = await pool.execute(
-      'SELECT COUNT(*) as count FROM inventory_items WHERE status = ? OR status IS NULL', 
-      ['AVAILABLE']
-    );
-    const available = availableResult[0].count;
-    
-    // Get assigned count
-    const [assignedResult] = await pool.execute(
-      'SELECT COUNT(*) as count FROM inventory_items WHERE status = ?', 
-      ['ASSIGNED']
-    );
-    const assigned = assignedResult[0].count;
-    
-    // Get maintenance count
-    const [maintenanceResult] = await pool.execute(
-      'SELECT COUNT(*) as count FROM inventory_items WHERE status = ?', 
-      ['MAINTENANCE']
-    );
-    const maintenance = maintenanceResult[0].count;
-    
-    res.json({
-      totalItems,
-      available,
-      assigned,
-      maintenance
-    });
-  } catch (error) {
-    console.error('Error fetching stats:', error);
-    res.status(500).json({ 
-      error: 'Failed to fetch statistics',
-      message: error.message 
-    });
-  }
-});
-
 // 404 handler for undefined routes
 app.use('*', (req, res) => {
   console.log(`❌ Route not found: ${req.method} ${req.originalUrl} from ${req.ip}`);
@@ -121,7 +76,9 @@ app.use('*', (req, res) => {
       'DELETE /api/inventory/items/:id',
       'GET /api/filters/categories',     
       'GET /api/filters/chains',         
-      'GET /api/filters/store-classes'
+      'GET /api/filters/store-classes',
+      'GET /api/filters/items',        
+      'GET /api/filters/branches'
     ]
   });
 });
