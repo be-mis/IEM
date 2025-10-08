@@ -37,15 +37,14 @@ export default function Filter({ onChange, asForm = false }) {
     const arr = Array.isArray(categories) ? categories : [];
     return arr
       .map((c) => {
-        const label = (c?.category ?? c?.catCode ?? '').toString().trim(); // ✅ safe default
-        const value = (c?.catCode ?? c?.category ?? '').toString().trim();
+        const label = (c?.category ?? c?.catCode ?? '').toString().trim();
         if (!label) return null;
+        // value must be lowercase category name (e.g., 'lamps', 'decors', ...)
+        const value = label.toLowerCase();
         return { value, label };
       })
       .filter(Boolean)
-      .sort((a, b) =>
-        (a.label || '').localeCompare(b.label || '', undefined, { sensitivity: 'base' })
-      );
+      .sort((a, b) => (a.label || '').localeCompare(b.label || '', undefined, { sensitivity: 'base' }));
   }, [categories]);
 
   const storeClassOptions = useMemo(() => {

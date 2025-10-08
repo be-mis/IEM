@@ -328,10 +328,18 @@ BranchRow.propTypes = {
 export default function ListOfExclusion(props) {
   // Source data
   const [branches, setBranches] = React.useState(
-    () => props.branches?.map((b) => ({ ...b })) || DEFAULT_BRANCHES,
+    () => props.branches?.map((b) => ({ ...b })) || DEFAULT_BRANCHES
   );
   const items = props.items || DEFAULT_ITEMS;
 
+
+  // ✅ keep local state in sync when parent provides new fetched branches
+  React.useEffect(() => {
+    if (Array.isArray(props.branches)) {
+    setBranches(props.branches.map(b => ({ ...b })));
+    }
+  }, [props.branches]);
+  
   // --- Search (MAIN TABLE ONLY) ---
   const [search, setSearch] = React.useState('');
   const debouncedSearch = useDebouncedValue(search, 200);
@@ -383,7 +391,7 @@ export default function ListOfExclusion(props) {
   }, []);
 
   return (
-    <Paper sx={{ width: '100%', overflow: 'hidden' }}>
+    <Paper sx={{ width: '100%', overflow: 'hidden', maxHeight: 520 }}>
       {/* MAIN search (affects only the branch list, not the subtable) */}
       <Box sx={{ p: 2 }}>
         <TextField
@@ -414,7 +422,7 @@ export default function ListOfExclusion(props) {
         />
       </Box>
 
-      <TableContainer sx={{ height: 600 }}>
+      <TableContainer sx={{ height: 400 }}>
         <Table aria-label="Branch exclusions table" stickyHeader>
           <TableHead>
             <TableRow>

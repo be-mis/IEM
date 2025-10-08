@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import axios from 'axios';
 
 // Set up axios base URL - Updated for network access
-const API_BASE_URL = 'http://localhost:5000/api';
+const API_BASE_URL = process.env.REACT_APP_API_BASE || 'http://localhost:5000/api';
 const api = axios.create({
   baseURL: API_BASE_URL,
   timeout: 10000, // 10 second timeout

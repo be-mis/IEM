@@ -53,7 +53,7 @@ router.get('/chains', async (req, res) => {
     const [rows2] = await pool.execute('SELECT DISTINCT chainCode FROM branches ORDER BY chainCode ASC');
     res.json({ items: rows2.map(r => ({ id: null, chainCode: r.chainCode, chainName: r.chainCode })) });
   } catch (err) {
-    console.errr('GET /filters/chains error:', err);
+    console.error('GET /filters/chains error:', err);
     res.status(500).json({ error: 'Failed to fetch chains' });
   }
 });
@@ -110,51 +110,51 @@ router.get('/items', async (req, res) => {
     }
 
     // whitelist parts
-    const prefixMap = {
-      'vchain': 'vChain',
-      'smh': 'sMH',
-      'oh': 'oH'
-    };
-    const suffixMap = {
-      'aseh': 'ASEH',
-      'bsh': 'BSH',
-      'csm': 'CSM',
-      'dss': 'DSS',
-      'eses': 'ESES'
-    };
+    const prefixMap = { vchain: 'vChain', smh: 'sMH', oh: 'oH' };
+    const suffixMap = { aseh: 'ASEH', bsh: 'BSH', csm: 'CSM', dss: 'DSS', eses: 'ESES' };
 
     const prefixKey = String(chain).trim().toLowerCase();
     const suffixKey = String(storeClass).trim().toLowerCase();
 
-    console.log(`Fetching items for chain=${chain} (prefixKey=${prefixKey}), storeClass=${storeClass} (suffixKey=${suffixKey}), category=${category}`);
+    // console.log(`Fetching items for chain=${chain} (prefixKey=${prefixKey}), storeClass=${storeClass} (suffixKey=${suffixKey}), category=${category}`);
 
     if (!prefixMap[prefixKey] || !suffixMap[suffixKey]) {
-      return res.status(400).json({ error: 'Invalid chain or storeClass. Examples: chain=vChain|sMH|oH and storeClass=ASEH|BSH|CSM|DSS|ESES' });
+      return res.status(400).json({
+        error: 'Invalid chain or storeClass. Examples: chain=vChain|sMH|oH and storeClass=ASEH|BSH|CSM|DSS|ESES'
+      });
     }
 
-    const columnName = `${prefixMap[prefixKey]}${suffixMap[suffixKey]}`; // safe because whitelisted
+    const columnName = `${prefixMap[prefixKey]}${suffixMap[suffixKey]}`;
+    const categoryLower = String(category).trim().toLowerCase(); // normalize once
 
     const pool = getPool();
     const query = `
       SELECT i.itemCode, i.itemDescription, i.itemCategory
       FROM items i
       INNER JOIN item_exclusivity_list e ON e.itemCode = i.itemCode
-      WHERE i.itemCategory = ? AND e.${columnName} = 1
+      WHERE LOWER(i.itemCategory) = ? AND e.${columnName} = 1
       ORDER BY i.itemCode ASC
     `;
 
-    const params = [String(category).trim()];
+    const params = [categoryLower];
 
-    // --- DEBUG: show the fully-interpolated SQL ---
-    const formatted = mysql.format(query, params);
-    console.log('[SQL /filters/items]', formatted);
-    // Optional: expose in a response header so you can see it in the browser Network tab
+    // Safe debug header (dev only) – strip non-printables & newlines
     if (process.env.NODE_ENV !== 'production') {
-      const safe = formatted.replace(/[\r\n]+/g, ' ').trim(); // no newlines
-      res.set('X-SQL-Debug', safe.slice(0, 500));
+      const mysql = require('mysql2');
+      const formatted = mysql.format(query, params);
+      const safe = formatted.replace(/[^\x20-\x7E]+/g, ' ').trim().slice(0, 500);
+      res.set('X-SQL-Debug', safe);
     }
+
     const [rows] = await pool.execute(query, params);
-    res.json({ items: rows.map(r => ({ id: r.id, itemCode: r.itemCode, itemDescription: r.itemDescription, itemCategory: r.itemCategory, quantity: 0})) });
+    res.json({
+      items: rows.map(r => ({
+        itemCode: r.itemCode,
+        itemDescription: r.itemDescription,
+        itemCategory: r.itemCategory,
+        quantity: 0
+      }))
+    });
   } catch (err) {
     console.error('GET /filters/items error:', err);
     res.status(500).json({ error: 'Failed to fetch items' });

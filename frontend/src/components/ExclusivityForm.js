@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 
 // MUI Core Components (only the ones used)
 import { Box, Grid, Accordion, AccordionSummary, AccordionDetails, Typography } from '@mui/material';
@@ -8,7 +8,8 @@ import { StoreMallDirectoryOutlined, InventoryOutlined, DisabledByDefaultOutline
 import Filter from '../components/Filter';
 import ListOfBranch from '../components/ListOfBranch';
 import ListOfItems from '../components/ListOfItems';
-import ListOfExclusion from '../components/ListOfExclusion';
+// import ListOfExclusion from '../components/ListOfExclusion';
+import ListOfExclusionContainer from '../components/ListOfExclusionContainer';
 
 const SectionHeader = ({ children, sx }) => (
   <Typography
@@ -27,16 +28,30 @@ const SectionHeader = ({ children, sx }) => (
 );
 
 export default function ExclusivityForm() {
-  const [selected, setSelected] = useState({ chain: '', category: '', storeClass: '' });
+  // const [selected, setSelected] = useState({ chain: '', category: '', storeClass: '' });
+
+  // ✅ Keep all filter values here (fixes 'no-undef' on chain/category/storeClass)
+  const [filters, setFilters] = useState({
+    chain: '',
+    category: '',
+    storeClass: '',
+    transaction: '',
+  });
+  
+  // Handy aliases if you need them locally
+  const { chain, category, storeClass, transaction } = filters;
+
+  
+  // Receive filter changes from <Filter />
+  const handleFilterChange = useCallback((next) => {
+    // next shape is: { chain, category, storeClass, transaction }
+    setFilters(next);
+  }, []);
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
       <Box>
-        <Filter
-          onChange={({ chain, category, storeClass }) => {
-            setSelected({ chain, category, storeClass });
-          }}
-        />
+        <Filter onChange={handleFilterChange} />
       </Box>
 
       <Box>
@@ -55,7 +70,7 @@ export default function ExclusivityForm() {
                 </SectionHeader>
               </AccordionSummary>
               <AccordionDetails sx={{ maxHeight: 560 }}>
-                <ListOfBranch filters={selected} />
+                <ListOfBranch filters={filters} />
               </AccordionDetails>
             </Accordion>
           </Grid>
@@ -78,7 +93,7 @@ export default function ExclusivityForm() {
                 </SectionHeader>
               </AccordionSummary>
               <AccordionDetails sx={{ maxHeight: 560 }}>
-                <ListOfItems filters={selected} />
+                <ListOfItems filters={filters} />
               </AccordionDetails>
             </Accordion>
           </Grid>
@@ -101,7 +116,8 @@ export default function ExclusivityForm() {
                 </SectionHeader>
               </AccordionSummary>
               <AccordionDetails sx={{ maxHeight: 560 }}>
-                <ListOfExclusion />
+                {/* <ListOfExclusion /> */}
+                <ListOfExclusionContainer filters={filters} />
               </AccordionDetails>
             </Accordion>
           </Grid>
