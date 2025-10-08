@@ -45,10 +45,20 @@ router.get('/store-classes', async (req, res) => {
 router.get('/chains', async (req, res) => {
   try {
     const pool = getPool();
-    const [rows] = await pool.execute(
-      'SELECT id, chainCode, chainName FROM chains ORDER BY chainName ASC'
-    );
-    res.json({ items: rows.map(r => ({ id: r.id, chainCode: r.chainCode, chainName: r.chainName })) });
+    try {
+      // Try real chains table first
+      const [rows] = await pool.execute('SELECT id, chainCode, chainName FROM chains ORDER BY chainName ASC');
+      if (rows && rows.length > 0) {
+        return res.json({ items: rows.map(r => ({ id: r.id, chainCode: r.chainCode, chainName: r.chainName })) });
+      }
+    } catch (err) {
+      // If table missing, fallback below; rethrow other errors
+      if (err && err.code !== 'ER_NO_SUCH_TABLE') throw err;
+    }
+
+    // Fallback: derive distinct chain codes from branches
+    const [rows2] = await pool.execute('SELECT DISTINCT chainCode FROM branches ORDER BY chainCode ASC');
+    res.json({ items: rows2.map(r => ({ id: null, chainCode: r.chainCode, chainName: r.chainCode })) });
   } catch (err) {
     console.error('GET /filters/chains error:', err);
     res.status(500).json({ error: 'Failed to fetch chains' });
@@ -57,7 +67,7 @@ router.get('/chains', async (req, res) => {
 
 router.get('/branches', async (req, res) => {
   try {
-    const { chain, storeClass, category } = req.query;
+    let { chain, storeClass, category } = req.query;
 
     if (!chain || !storeClass || !category) {
       return res.status(400).json({ 
@@ -65,7 +75,25 @@ router.get('/branches', async (req, res) => {
       });
     }
 
-    // Validate the category column exists (whitelist approach for security)
+    // basic normalization
+    chain = String(chain).trim();
+    storeClass = String(storeClass).trim();
+    category = String(category).trim().toLowerCase();
+
+    // enforce reasonable lengths
+    if (chain.length === 0 || chain.length > 100 || storeClass.length === 0 || storeClass.length > 50) {
+      return res.status(400).json({ error: 'Invalid parameter length' });
+    }
+
+    // If storeClass is expected to be integer in DB, require digits only:
+    let useStoreClass;
+    if (/^\d+$/.test(storeClass)) {
+      useStoreClass = parseInt(storeClass, 10);
+    } else {
+      // accept non-numeric storeClass only if your DB column is string
+      useStoreClass = storeClass;
+    }
+    
     const validColumns = {
       'lamps': 'lampsClass',
       'decors': 'decorsClass',
@@ -73,8 +101,8 @@ router.get('/branches', async (req, res) => {
       'stationery': 'stationeryClass',
       'frames': 'framesClass'
     };
-
-    const columnName = validColumns[String(category).toLowerCase()];
+    
+    const columnName = validColumns[category];
 
     if (!columnName) {
       return res.status(400).json({ 
@@ -84,7 +112,6 @@ router.get('/branches', async (req, res) => {
 
     const pool = getPool();
 
-    // Inject validated column name directly (safe because we validated against whitelist).
     const query = `
       SELECT branchCode, branchName
       FROM branches
@@ -92,7 +119,7 @@ router.get('/branches', async (req, res) => {
       ORDER BY branchCode ASC
     `;
 
-    const [rows] = await pool.execute(query, [chain, storeClass]);
+    const [rows] = await pool.execute(query, [chain, useStoreClass]);
 
     res.json({
       items: rows.map(r => ({
