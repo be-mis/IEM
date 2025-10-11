@@ -47,7 +47,6 @@ export default function useItems({ chain, storeClass, category } = {}, debounceM
       setError(null);
       return;
     }
-
     // 4. Use a modern AbortController for handling request cancellation.
     const controller = new AbortController();
 

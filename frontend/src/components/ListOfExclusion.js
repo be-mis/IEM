@@ -323,7 +323,7 @@ BranchRow.propTypes = {
  *
  * Props are optional; if omitted, local example data is used.
  *
- * @param {{ branches?: Branch[], items?: Item[] }} props
+ * @param {{ branches?: Branch[], items?: Item[], onBranchesChange?: (branches: Branch[]) => void }} props
  */
 export default function ListOfExclusion(props) {
   // Source data
@@ -332,13 +332,19 @@ export default function ListOfExclusion(props) {
   );
   const items = props.items || DEFAULT_ITEMS;
 
-
   // ✅ keep local state in sync when parent provides new fetched branches
   React.useEffect(() => {
     if (Array.isArray(props.branches)) {
-    setBranches(props.branches.map(b => ({ ...b })));
+      setBranches(props.branches.map(b => ({ ...b })));
     }
   }, [props.branches]);
+  
+  // ✅ NEW: Notify parent component when branches (exclusions) change
+  React.useEffect(() => {
+    if (props.onBranchesChange && typeof props.onBranchesChange === 'function') {
+      props.onBranchesChange(branches);
+    }
+  }, [branches, props.onBranchesChange]);
   
   // --- Search (MAIN TABLE ONLY) ---
   const [search, setSearch] = React.useState('');
@@ -450,7 +456,7 @@ export default function ListOfExclusion(props) {
               <TableRow>
                 <TableCell colSpan={4}>
                   <Typography variant="body2" color="text.secondary">
-                    No branches found{debouncedSearch ? ` for “${debouncedSearch}”` : ''}.
+                    No branches found{debouncedSearch ? ` for "${debouncedSearch}"` : ''}.
                   </Typography>
                 </TableCell>
               </TableRow>

@@ -57,7 +57,14 @@ export function useBranches(filters) {
         const res = await api.get(`/filters/branches${query}`);
         if (cancelled) return;
         //console.log(`Fetched Branches for query "${query}":`, res.data.items);
+
+        // ADD THIS TO SEE YOUR DATA STRUCTURE:
+        console.log('=== BRANCH API RESPONSE ===');
+        console.log('First branch:', res.data?.items?.[0]);
+        console.log('All branches:', res.data?.items);
+
         setBranches(Array.isArray(res.data?.items) ? res.data.items : []);
+
       } catch (e) {
         if (cancelled) return;
         setError(e.response?.data?.error || e.message || 'Failed to fetch branches');

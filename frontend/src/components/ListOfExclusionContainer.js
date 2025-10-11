@@ -8,7 +8,7 @@ import { useBranches } from '../hooks/useBranches';
 import useItems from '../hooks/useItems';
 import ListOfExclusion from './ListOfExclusion';
 
-export default function ListOfExclusionContainer({ filters, quantities }) {
+export default function ListOfExclusionContainer({ filters, quantities, onBranchesChange }) {
   // Fetch from your existing hooks
   const { branches: rawBranches, loading: brLoading, error: brError } = useBranches(filters);
   const { items: rawItems, loading: itLoading, error: itError } = useItems(filters);
@@ -75,5 +75,11 @@ export default function ListOfExclusionContainer({ filters, quantities }) {
     );
   }
 
-  return <ListOfExclusion branches={branches} items={items} />;
+  return (
+    <ListOfExclusion 
+      branches={branches} 
+      items={items} 
+      onBranchesChange={onBranchesChange}
+    />
+  );
 }
