@@ -359,10 +359,10 @@ const Dashboard = () => {
           <AutoAwesome sx={{ fontSize: 24, color: 'white' }} />
         </Box>
         <Typography variant="h6" sx={{ fontWeight: '700', color: '#1f2937', mb: 1 }}>
-          MIS Inventory
+          IEM
         </Typography>
         <Typography variant="body2" sx={{ color: '#6b7280', fontWeight: '500' }}>
-          Management System
+          Item Exclusivity Module
         </Typography>
       </Box>
       <List sx={{ flex: 1, px: 2 }}>

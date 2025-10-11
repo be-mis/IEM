@@ -18,7 +18,7 @@ function createData(itemCode, description, quantity) {
 }
 const rowKey = (r) => `${r.itemCode}|${r.description}`;
 
-export default function StickyHeadTable({ filters }) {
+export default function StickyHeadTable({ filters, quantities = {}, setQuantities }) {
 
   const { items, loading, error } = useItems(filters);
 
@@ -30,24 +30,28 @@ export default function StickyHeadTable({ filters }) {
   const [rowsPerPage, setRowsPerPage] = React.useState(10);
 
   const rows = React.useMemo(() => {
-    if (!Array.isArray(items)) return [];
-    return items.map((it) => createData(it.itemCode, it.itemDescription ?? it.description ?? '', 0));
+  if (!Array.isArray(items)) return [];
+    return items.map((it) => {
+      const itemCode = it.itemCode || '';
+      const description = it.itemDescription ?? it.description ?? '';
+      return createData(itemCode, description, 0);
+    });
   }, [items]);
 
-  const [quantities, setQuantities] = React.useState(() =>
-    Object.fromEntries(rows.map((r) => {
-      const n = Number(r.quantity);
-      return [rowKey(r), Number.isFinite(n) ? n : 0];
-    }))
-  );
-
   React.useEffect(() => {
-    setQuantities(Object.fromEntries(rows.map((r) => {
-      const n = Number(r.quantity);
-      return [rowKey(r), Number.isFinite(n) ? n : 0];
-    })));
+    setQuantities((prev) => {
+      const newQuantities = { ...prev };
+      rows.forEach((r) => {
+        const key = rowKey(r);
+        if (!(key in newQuantities)) {
+          const n = Number(r.quantity);
+          newQuantities[key] = Number.isFinite(n) ? n : 0;
+        }
+      });
+      return newQuantities;
+    });
     setPage(0);
-  }, [rows]);
+  }, [rows, setQuantities]);
 
   const handleChangePage = (_event, newPage) => setPage(newPage);
   const handleChangeRowsPerPage = (event) => {

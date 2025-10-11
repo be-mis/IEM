@@ -27,6 +27,8 @@ const SectionHeader = ({ children, sx }) => (
   </Typography>
 );
 
+
+
 export default function ExclusivityForm() {
   // const [selected, setSelected] = useState({ chain: '', category: '', storeClass: '' });
 
@@ -38,6 +40,9 @@ export default function ExclusivityForm() {
     transaction: '',
   });
   
+  // ADD THIS NEW STATE:
+  const [quantities, setQuantities] = useState({});
+
   // Handy aliases if you need them locally
   const { chain, category, storeClass, transaction } = filters;
 
@@ -93,7 +98,10 @@ export default function ExclusivityForm() {
                 </SectionHeader>
               </AccordionSummary>
               <AccordionDetails sx={{ maxHeight: 560 }}>
-                <ListOfItems filters={filters} />
+                <ListOfItems
+                filters={filters}
+                quantities={quantities}
+                setQuantities={setQuantities} />
               </AccordionDetails>
             </Accordion>
           </Grid>
@@ -117,7 +125,9 @@ export default function ExclusivityForm() {
               </AccordionSummary>
               <AccordionDetails sx={{ maxHeight: 560 }}>
                 {/* <ListOfExclusion /> */}
-                <ListOfExclusionContainer filters={filters} />
+                <ListOfExclusionContainer
+                filters={filters}
+                quantities={quantities} />
               </AccordionDetails>
             </Accordion>
           </Grid>
