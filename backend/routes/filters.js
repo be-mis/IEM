@@ -9,7 +9,7 @@ router.get('/categories', async (req, res) => {
   try {
     const pool = getPool();
     const [rows] = await pool.execute(
-      'SELECT id, catCode, category FROM categories ORDER BY category ASC'
+      'SELECT id, catCode, category FROM epc_categories ORDER BY category ASC'
     );
     res.json({ items: rows.map(r => ({ id: r.id, catCode: r.catCode, category: r.category })) });
   } catch (err) {
@@ -23,7 +23,7 @@ router.get('/store-classes', async (req, res) => {
   try {
     const pool = getPool();
     const [rows] = await pool.execute(
-      'SELECT id, storeClassCode, storeClassification FROM store_class ORDER BY storeClassification ASC'
+      'SELECT id, storeClassCode, storeClassification FROM epc_store_class ORDER BY storeClassification ASC'
     );
     res.json({ items: rows.map(r => ({ id: r.id, storeClassCode: r.storeClassCode, storeClassification: r.storeClassification })) });
   } catch (err) {
@@ -37,7 +37,7 @@ router.get('/chains', async (req, res) => {
   try {
     const pool = getPool();
     try {
-      const [rows] = await pool.execute('SELECT id, chainCode, chainName FROM chains ORDER BY chainName ASC');
+      const [rows] = await pool.execute('SELECT id, chainCode, chainName FROM epc_chains ORDER BY chainName ASC');
       if (rows && rows.length > 0) {
         return res.json({ items: rows.map(r => ({ id: r.id, chainCode: r.chainCode, chainName: r.chainName })) });
       }
@@ -50,7 +50,7 @@ router.get('/chains', async (req, res) => {
       }
     }
     // Fallback: derive distinct chain codes from branches
-    const [rows2] = await pool.execute('SELECT DISTINCT chainCode FROM branches ORDER BY chainCode ASC');
+    const [rows2] = await pool.execute('SELECT DISTINCT chainCode FROM epc_branches ORDER BY chainCode ASC');
     res.json({ items: rows2.map(r => ({ id: null, chainCode: r.chainCode, chainName: r.chainCode })) });
   } catch (err) {
     console.error('GET /filters/chains error:', err);
@@ -88,7 +88,7 @@ router.get('/branches', async (req, res) => {
     const pool = getPool();
     const query = `
       SELECT branchCode, branchName
-      FROM branches
+      FROM epc_branches
       WHERE chainCode = ? AND ${columnName} = ?
       ORDER BY branchCode ASC
     `;
@@ -130,8 +130,8 @@ router.get('/items', async (req, res) => {
     const pool = getPool();
     const query = `
       SELECT i.itemCode, i.itemDescription, i.itemCategory
-      FROM items i
-      INNER JOIN item_exclusivity_list e ON e.itemCode = i.itemCode
+      FROM epc_item_list i
+      INNER JOIN epc_item_exclusivity_list e ON e.itemCode = i.itemCode
       WHERE LOWER(i.itemCategory) = ? AND e.${columnName} = 1
       ORDER BY i.itemCode ASC
     `;
