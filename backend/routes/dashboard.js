@@ -50,22 +50,30 @@ router.get('/recent-activity', async (req, res) => {
     const pool = getPool();
     const limit = parseInt(req.query.limit) || 10;
     
+    // Fixed: Return recent items based on updatedAt timestamp
     const [activities] = await pool.execute(`
       SELECT 
-        al.*,
+        i.id,
         i.item_name,
-        i.asset_tag_number,
-        u.full_name as user_name
-      FROM activity_logs al
-      LEFT JOIN inventory_items i ON al.item_id = i.id
-      LEFT JOIN users u ON al.user_id = u.id
-      ORDER BY al.created_at DESC
+        i.serialNumber as asset_tag_number,
+        i.status,
+        i.assigned_to as user_name,
+        i.updatedAt as created_at,
+        CASE 
+          WHEN i.status = 'assigned' THEN 'Item Assigned'
+          WHEN i.status = 'available' THEN 'Item Available'
+          WHEN i.status = 'maintenance' THEN 'Item in Maintenance'
+          WHEN i.status = 'retired' THEN 'Item Retired'
+          ELSE 'Item Updated'
+        END as action
+      FROM inventory_items i
+      ORDER BY i.updatedAt DESC
       LIMIT ?
     `, [limit]);
     
     res.json(activities);
   } catch (error) {
-    //console.error('Error fetching recent activity:', error);
+    console.error('Error fetching recent activity:', error);
     res.status(500).json({ error: 'Failed to fetch recent activity' });
   }
 });
@@ -75,22 +83,22 @@ router.get('/category-breakdown', async (req, res) => {
   try {
     const pool = getPool();
     
+    // Fixed: Use the actual table structure
     const [breakdown] = await pool.execute(`
       SELECT 
-        c.name as category_name,
+        i.category as category_name,
         COUNT(i.id) as item_count,
         SUM(CASE WHEN i.status = 'available' THEN 1 ELSE 0 END) as available_count,
         SUM(CASE WHEN i.status = 'assigned' THEN 1 ELSE 0 END) as assigned_count,
         SUM(CASE WHEN i.status = 'maintenance' THEN 1 ELSE 0 END) as maintenance_count
-      FROM categories c
-      LEFT JOIN inventory_items i ON c.id = i.category_id
-      GROUP BY c.id, c.name
+      FROM inventory_items i
+      GROUP BY i.category
       ORDER BY item_count DESC
     `);
     
     res.json(breakdown);
   } catch (error) {
-    //console.error('Error fetching category breakdown:', error);
+    console.error('Error fetching category breakdown:', error);
     res.status(500).json({ error: 'Failed to fetch category breakdown' });
   }
 });
@@ -101,21 +109,21 @@ router.get('/low-stock', async (req, res) => {
     const pool = getPool();
     const threshold = parseInt(req.query.threshold) || 5;
     
+    // Fixed: Use the actual table structure
     const [lowStock] = await pool.execute(`
       SELECT 
-        c.name as category_name,
+        i.category as category_name,
         COUNT(i.id) as total_items,
         SUM(CASE WHEN i.status = 'available' THEN 1 ELSE 0 END) as available_items
-      FROM categories c
-      LEFT JOIN inventory_items i ON c.id = i.category_id
-      GROUP BY c.id, c.name
+      FROM inventory_items i
+      GROUP BY i.category
       HAVING available_items < ?
       ORDER BY available_items ASC
     `, [threshold]);
     
     res.json(lowStock);
   } catch (error) {
-    //console.error('Error fetching low stock items:', error);
+    console.error('Error fetching low stock items:', error);
     res.status(500).json({ error: 'Failed to fetch low stock information' });
   }
 });
@@ -126,24 +134,28 @@ router.get('/assignments-due', async (req, res) => {
     const pool = getPool();
     const days = parseInt(req.query.days) || 7; // Default to next 7 days
     
+    // Fixed: Use inventory_items table directly
     const [dueItems] = await pool.execute(`
       SELECT 
-        ia.*,
+        i.id,
         i.item_name,
-        i.asset_tag_number,
+        i.serialNumber as asset_tag_number,
         i.brand,
-        i.model
-      FROM item_assignments ia
-      JOIN inventory_items i ON ia.item_id = i.id
-      WHERE ia.is_active = TRUE
-        AND ia.expected_return_date IS NOT NULL
-        AND ia.expected_return_date <= DATE_ADD(CURRENT_DATE, INTERVAL ? DAY)
-      ORDER BY ia.expected_return_date ASC
+        i.model,
+        i.assigned_to,
+        i.department,
+        i.assignment_date,
+        DATEDIFF(CURDATE(), i.assignment_date) as days_assigned
+      FROM inventory_items i
+      WHERE i.status = 'assigned'
+        AND i.assignment_date IS NOT NULL
+        AND DATEDIFF(CURDATE(), i.assignment_date) >= ?
+      ORDER BY i.assignment_date ASC
     `, [days]);
     
     res.json(dueItems);
   } catch (error) {
-    //console.error('Error fetching assignments due:', error);
+    console.error('Error fetching assignments due:', error);
     res.status(500).json({ error: 'Failed to fetch assignments due' });
   }
 });
@@ -154,20 +166,22 @@ router.get('/monthly-trends', async (req, res) => {
     const pool = getPool();
     const months = parseInt(req.query.months) || 6; // Default to last 6 months
     
+    // Fixed: Use inventory_items table
     const [trends] = await pool.execute(`
       SELECT 
         DATE_FORMAT(assignment_date, '%Y-%m') as month,
         COUNT(*) as assignments,
-        COUNT(DISTINCT assigned_to_name) as unique_assignees
-      FROM item_assignments
+        COUNT(DISTINCT assigned_to) as unique_assignees
+      FROM inventory_items
       WHERE assignment_date >= DATE_SUB(CURRENT_DATE, INTERVAL ? MONTH)
+        AND assignment_date IS NOT NULL
       GROUP BY DATE_FORMAT(assignment_date, '%Y-%m')
       ORDER BY month ASC
     `, [months]);
     
     res.json(trends);
   } catch (error) {
-    //console.error('Error fetching monthly trends:', error);
+    console.error('Error fetching monthly trends:', error);
     res.status(500).json({ error: 'Failed to fetch monthly trends' });
   }
 });
@@ -178,22 +192,23 @@ router.get('/top-users', async (req, res) => {
     const pool = getPool();
     const limit = parseInt(req.query.limit) || 10;
     
+    // Fixed: Use inventory_items table
     const [topUsers] = await pool.execute(`
       SELECT 
-        assigned_to_name,
+        assigned_to as assigned_to_name,
         department,
         COUNT(*) as total_assignments,
-        COUNT(CASE WHEN is_active = TRUE THEN 1 END) as current_assignments
-      FROM item_assignments
-      WHERE assigned_to_name IS NOT NULL
-      GROUP BY assigned_to_name, department
+        COUNT(CASE WHEN status = 'assigned' THEN 1 END) as current_assignments
+      FROM inventory_items
+      WHERE assigned_to IS NOT NULL
+      GROUP BY assigned_to, department
       ORDER BY total_assignments DESC
       LIMIT ?
     `, [limit]);
     
     res.json(topUsers);
   } catch (error) {
-    //console.error('Error fetching top users:', error);
+    console.error('Error fetching top users:', error);
     res.status(500).json({ error: 'Failed to fetch top users' });
   }
 });

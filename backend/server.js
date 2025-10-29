@@ -5,6 +5,8 @@ const { connectDatabase, initializeDatabase } = require('./config/database');
 const inventoryRoutes = require('./routes/inventory');
 const authRoutes = require('./routes/auth');
 const filtersRoutes = require('./routes/filters');
+const dashboardRoutes = require('./routes/dashboard');
+const reportsRoutes = require('./routes/reports');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -43,6 +45,8 @@ app.get('/health', (req, res) => {
 app.use('/api/inventory', inventoryRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/filters', filtersRoutes);
+app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/reports', reportsRoutes);
 
 
 // Root endpoint

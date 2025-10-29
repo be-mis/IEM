@@ -109,14 +109,28 @@ router.get('/items', async (req, res) => {
       return res.status(400).json({ error: 'Missing required parameters: chain, storeClass, category' });
     }
 
-    // whitelist parts
+    // whitelist parts - Map store classes to single letter suffixes
     const prefixMap = { vchain: 'vChain', smh: 'sMH', oh: 'oH' };
-    const suffixMap = { aseh: 'ASEH', bsh: 'BSH', csm: 'CSM', dss: 'DSS', eses: 'ESES' };
+    const suffixMap = { 
+      aseh: 'ASEH', 
+      bsh: 'BSH', 
+      csm: 'CSM', 
+      dss: 'DSS', 
+      eses: 'ESES' 
+    };
+    // Map store class codes to their corresponding letter suffixes (A, B, C, D, E)
+    const letterSuffixMap = {
+      aseh: 'A',
+      bsh: 'B',
+      csm: 'C',
+      dss: 'D',
+      eses: 'E'
+    };
 
     const prefixKey = String(chain).trim().toLowerCase();
     const suffixKey = String(storeClass).trim().toLowerCase();
 
-    // console.log(`Fetching items for chain=${chain} (prefixKey=${prefixKey}), storeClass=${storeClass} (suffixKey=${suffixKey}), category=${category}`);
+    console.log(`Fetching items for chain=${chain} (prefixKey=${prefixKey}), storeClass=${storeClass} (suffixKey=${suffixKey}), category=${category}`);
 
     if (!prefixMap[prefixKey] || !suffixMap[suffixKey]) {
       return res.status(400).json({
@@ -124,8 +138,11 @@ router.get('/items', async (req, res) => {
       });
     }
 
-    const columnName = `${prefixMap[prefixKey]}${suffixMap[suffixKey]}`;
+    // Build column name using letter suffix (e.g., vChainA, sMHB, oHC)
+    const columnName = `${prefixMap[prefixKey]}${letterSuffixMap[suffixKey]}`;
     const categoryLower = String(category).trim().toLowerCase(); // normalize once
+    
+    console.log(`Column name constructed: ${columnName}`);
 
     const pool = getPool();
     const query = `

@@ -128,11 +128,6 @@ export default function ExclusivityForm() {
           startIcon={<FileDownloadIcon />}
           onClick={handleExport}
           disabled={branchesLoading || itemsLoading}
-          sx={{ 
-            mt: 0,
-            minWidth: 180,
-            height: 56 // Match typical filter component height
-          }}
         >
           Export to Excel
         </Button>

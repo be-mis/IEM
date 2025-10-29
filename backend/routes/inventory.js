@@ -259,14 +259,14 @@ router.post('/items/:id/checkout', async (req, res) => {
           updatedAt = CURRENT_TIMESTAMP
       WHERE id = ? AND status = ?
     `, [
-      'assigned', 
+      'assigned',  // Use lowercase for consistency
       assignedToName, 
       department || null,
       email || null, 
       phone || null,
       assignment_date,
       id, 
-      'available'
+      'available'  // Use lowercase for consistency
     ]);
     
     if (updateResult.affectedRows === 0) {
