@@ -5,7 +5,7 @@ import { useChains, useCategories, useStoreClasses } from '../hooks/useFilter';
 
 const TRANSACTION_OPTIONS = ['Repeat Order', 'New Item'];
 
-export default function Filter({ onChange, asForm = false }) {
+export default function Filter({ onChange, asForm = false, hideTransaction = false }) {
   const [chain, setChain] = useState('');
   const [category, setCategory] = useState('');
   const [storeClass, setStoreClass] = useState('');
@@ -157,7 +157,7 @@ export default function Filter({ onChange, asForm = false }) {
   return (
     <Box component="div" autoComplete="off" sx={{ '& > :not(style)': { width: '100%' } }}>
       <Grid container spacing={3}>
-        <Grid item xs={12} md={3}>
+        <Grid item xs={12} md={hideTransaction ? 4 : 3}>
           <FormControl size="small" fullWidth>
             <InputLabel id="filter-chain">Chain</InputLabel>
             <Select
@@ -182,7 +182,7 @@ export default function Filter({ onChange, asForm = false }) {
           </FormControl>
         </Grid>
 
-        <Grid item xs={12} md={3}>
+        <Grid item xs={12} md={hideTransaction ? 4 : 3}>
           <FormControl size="small" fullWidth>
             <InputLabel id="filter-category">Category</InputLabel>
             <Select
@@ -190,7 +190,7 @@ export default function Filter({ onChange, asForm = false }) {
               value={category}
               label="Category"
               onChange={handleCategoryChange}
-              disabled={loading || !!error || categoryOptions.length === 0 || !chain}
+              disabled={loading || !!error || categoryOptions.length === 0}
               renderValue={(v) =>
                 v ? categoryOptions.find((o) => o.value === v)?.label : '— Select Category —'
               }
@@ -209,7 +209,7 @@ export default function Filter({ onChange, asForm = false }) {
           </FormControl>
         </Grid>
 
-        <Grid item xs={12} md={3}>
+        <Grid item xs={12} md={hideTransaction ? 4 : 3}>
           <FormControl size="small" fullWidth>
             <InputLabel id="filter-store-class">Store Classification</InputLabel>
             <Select
@@ -236,26 +236,28 @@ export default function Filter({ onChange, asForm = false }) {
           </FormControl>
         </Grid>
 
-        <Grid item xs={12} md={3}>
-          <FormControl size="small" fullWidth>
-            <InputLabel id="filter-transaction">Transaction Type</InputLabel>
-            <Select
-              labelId="filter-transaction"
-              value={transaction}
-              label="Transaction Type"
-              onChange={handleTransactionChange}
-              disabled={!storeClass}
-              renderValue={(v) => (v ? v : '— Select Transaction —')}
-            >
-              <PlaceholderItem text="— Select Transaction —" />
-              {TRANSACTION_OPTIONS.map((tx) => (
-                <MenuItem key={tx} value={tx}>
-                  {tx}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-        </Grid>
+        {!hideTransaction && (
+          <Grid item xs={12} md={3}>
+            <FormControl size="small" fullWidth>
+              <InputLabel id="filter-transaction">Transaction Type</InputLabel>
+              <Select
+                labelId="filter-transaction"
+                value={transaction}
+                label="Transaction Type"
+                onChange={handleTransactionChange}
+                disabled={!storeClass}
+                renderValue={(v) => (v ? v : '— Select Transaction —')}
+              >
+                <PlaceholderItem text="— Select Transaction —" />
+                {TRANSACTION_OPTIONS.map((tx) => (
+                  <MenuItem key={tx} value={tx}>
+                    {tx}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Grid>
+        )}
       </Grid>
     </Box>
   );

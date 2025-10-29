@@ -23,6 +23,8 @@ import InputAdornment from '@mui/material/InputAdornment';
 import IconButtonMui from '@mui/material/IconButton';
 import SearchIcon from '@mui/icons-material/Search';
 import ClearIcon from '@mui/icons-material/Clear';
+import DeleteForeverIcon from '@mui/icons-material/DeleteForever';
+import Tooltip from '@mui/material/Tooltip';
 
 /**
  * ===========================
@@ -271,14 +273,15 @@ function BranchRow({ branch, items, onUpdateBranch }) {
                         </TableCell>
                         <TableCell>{it.name}</TableCell>
                         <TableCell>
-                          <Button
-                            size="small"
-                            variant="outlined"
-                            onClick={() => handleRemove(it.id)}
-                            aria-label={`Remove ${it.code} from ${branch.code} exclusions`}
-                          >
-                            Remove
-                          </Button>
+                          <Tooltip title="Remove item">
+                            <IconButton 
+                              color="error"
+                              onClick={() => handleRemove(it.id)}
+                              aria-label={`Remove ${it.code} from ${branch.code} exclusions`}
+                            >
+                              <DeleteForeverIcon />
+                            </IconButton>
+                          </Tooltip>
                         </TableCell>
                       </TableRow>
                     ))

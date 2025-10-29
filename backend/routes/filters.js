@@ -109,7 +109,7 @@ router.get('/items', async (req, res) => {
       return res.status(400).json({ error: 'Missing required parameters: chain, storeClass, category' });
     }
 
-    // whitelist parts - Map store classes to single letter suffixes
+    // whitelist parts - Map chain and store class to build column name
     const prefixMap = { vchain: 'vChain', smh: 'sMH', oh: 'oH' };
     const suffixMap = { 
       aseh: 'ASEH', 
@@ -117,14 +117,6 @@ router.get('/items', async (req, res) => {
       csm: 'CSM', 
       dss: 'DSS', 
       eses: 'ESES' 
-    };
-    // Map store class codes to their corresponding letter suffixes (A, B, C, D, E)
-    const letterSuffixMap = {
-      aseh: 'A',
-      bsh: 'B',
-      csm: 'C',
-      dss: 'D',
-      eses: 'E'
     };
 
     const prefixKey = String(chain).trim().toLowerCase();
@@ -138,8 +130,8 @@ router.get('/items', async (req, res) => {
       });
     }
 
-    // Build column name using letter suffix (e.g., vChainA, sMHB, oHC)
-    const columnName = `${prefixMap[prefixKey]}${letterSuffixMap[suffixKey]}`;
+    // Build column name using full suffix (e.g., vChainASEH, sMHBSH, oHCSM)
+    const columnName = `${prefixMap[prefixKey]}${suffixMap[suffixKey]}`;
     const categoryLower = String(category).trim().toLowerCase(); // normalize once
     
     console.log(`Column name constructed: ${columnName}`);
@@ -175,6 +167,146 @@ router.get('/items', async (req, res) => {
   } catch (err) {
     console.error('GET /filters/items error:', err);
     res.status(500).json({ error: 'Failed to fetch items' });
+  }
+});
+
+// GET /api/filters/available-items - Get items not yet in exclusivity list
+router.get('/available-items', async (req, res) => {
+  try {
+    const { chain, storeClass, category } = req.query;
+    if (!chain || !storeClass || !category) {
+      return res.status(400).json({ error: 'Missing required parameters: chain, storeClass, category' });
+    }
+
+    // Build column name for exclusivity check
+    const prefixMap = { vchain: 'vChain', smh: 'sMH', oh: 'oH' };
+    const suffixMap = { 
+      aseh: 'ASEH', 
+      bsh: 'BSH', 
+      csm: 'CSM', 
+      dss: 'DSS', 
+      eses: 'ESES' 
+    };
+
+    const prefixKey = String(chain).trim().toLowerCase();
+    const suffixKey = String(storeClass).trim().toLowerCase();
+
+    if (!prefixMap[prefixKey] || !suffixMap[suffixKey]) {
+      return res.status(400).json({
+        error: 'Invalid chain or storeClass. Examples: chain=vChain|sMH|oH and storeClass=ASEH|BSH|CSM|DSS|ESES'
+      });
+    }
+
+    const columnName = `${prefixMap[prefixKey]}${suffixMap[suffixKey]}`;
+    const categoryLower = String(category).trim().toLowerCase();
+
+    console.log(`Fetching available items - Column: ${columnName}, Category: ${categoryLower}`);
+
+    const pool = getPool();
+    
+    // Get all items from epc_item_list for this category
+    // that either don't exist in exclusivity list OR have the column set to 'NA'
+    const query = `
+      SELECT i.itemCode, i.itemDescription, i.itemCategory
+      FROM epc_item_list i
+      LEFT JOIN epc_item_exclusivity_list e ON e.itemCode = i.itemCode
+      WHERE LOWER(i.itemCategory) = ? 
+        AND (e.itemCode IS NULL OR e.${columnName} = 'NA' OR e.${columnName} IS NULL)
+      ORDER BY i.itemCode ASC
+    `;
+
+    const [rows] = await pool.execute(query, [categoryLower]);
+    
+    res.json({
+      items: rows.map(r => ({
+        itemCode: r.itemCode,
+        itemDescription: r.itemDescription,
+        itemCategory: r.itemCategory
+      }))
+    });
+  } catch (err) {
+    console.error('GET /filters/available-items error:', err);
+    res.status(500).json({ error: 'Failed to fetch available items' });
+  }
+});
+
+// GET /filters/available-branches - Fetch branches NOT in exclusivity for chain/category/storeClass
+router.get('/available-branches', async (req, res) => {
+  try {
+    const { chain, category, storeClass } = req.query;
+
+    if (!chain || !category || !storeClass) {
+      return res.status(400).json({ error: 'Chain, category, and storeClass are required' });
+    }
+
+    // Normalize inputs
+    const chainValue = String(chain).trim();
+    const categoryLower = String(category).trim().toLowerCase();
+    const storeClassValue = String(storeClass).trim();
+
+    // Validate category and get the column name for epc_branches table
+    const validColumns = {
+      'lamps': 'lampsClass',
+      'decors': 'decorsClass',
+      'clocks': 'clocksClass',
+      'stationery': 'stationeryClass',
+      'frames': 'framesClass'
+    };
+
+    const categoryColumn = validColumns[categoryLower];
+    if (!categoryColumn) {
+      return res.status(400).json({ error: `Invalid category. Must be one of: ${Object.keys(validColumns).join(', ')}` });
+    }
+
+    // Build exclusivity column name (e.g., vChainASEH, sMHBSH, oHCSM)
+    const prefixMap = { vchain: 'vChain', smh: 'sMH', oh: 'oH' };
+    const suffixMap = { 
+      aseh: 'ASEH', 
+      bsh: 'BSH', 
+      csm: 'CSM', 
+      dss: 'DSS', 
+      eses: 'ESES' 
+    };
+
+    const prefixKey = chainValue.toLowerCase();
+    const suffixKey = storeClassValue.toLowerCase();
+
+    if (!prefixMap[prefixKey] || !suffixMap[suffixKey]) {
+      return res.status(400).json({
+        error: 'Invalid chain or storeClass. Examples: chain=vChain|sMH|oH and storeClass=ASEH|BSH|CSM|DSS|ESES'
+      });
+    }
+
+    const exclusivityColumn = `${prefixMap[prefixKey]}${suffixMap[suffixKey]}`;
+
+    console.log(`Fetching available branches - Chain: ${chainValue}, Category: ${categoryLower} (${categoryColumn}), StoreClass: ${storeClassValue}, ExclusivityColumn: ${exclusivityColumn}`);
+
+    const pool = getPool();
+    
+    // Get all branches from epc_branches where:
+    // 1. chainCode matches the selected chain (e.g., 'vChain')
+    // 2. The category column (e.g., lampsClass) is NULL, 'NA', or NOT equal to storeClass
+    const query = `
+      SELECT b.branchCode, b.branchName, b.chainCode, b.${categoryColumn}
+      FROM epc_branches b
+      WHERE b.chainCode = ? 
+        AND (b.${categoryColumn} IS NULL OR b.${categoryColumn} = 'NA' OR b.${categoryColumn} != ?)
+      ORDER BY b.branchCode ASC
+    `;
+
+    const [rows] = await pool.execute(query, [chainValue, storeClassValue]);
+    
+    res.json({
+      items: rows.map(r => ({
+        branchCode: r.branchCode,
+        branchName: r.branchName,
+        chainCode: r.chainCode,
+        storeClass: r[categoryColumn]
+      }))
+    });
+  } catch (err) {
+    console.error('GET /filters/available-branches error:', err);
+    res.status(500).json({ error: 'Failed to fetch available branches' });
   }
 });
 
