@@ -1,6 +1,7 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const db = require('../config/database');
+const { logAudit, getIp } = require('../utils/auditLogger');
 
 // Generate JWT token
 const generateToken = (userId, username, role) => {
@@ -41,6 +42,18 @@ const login = async (req, res) => {
 
     // Generate token
     const token = generateToken(user.id, user.username, user.role);
+
+    // Fire-and-forget audit log (do not await to keep login snappy)
+    logAudit({
+      entityType: 'auth',
+      entityId: String(user.id),
+      entityName: user.username,
+      action: 'login',
+      userId: user.id,
+      userName: user.username,
+      ip: getIp(req),
+      details: { method: 'password', userAgent: req.headers['user-agent'] || null }
+    });
 
     // Return user data (excluding password)
     res.json({
@@ -88,6 +101,18 @@ const register = async (req, res) => {
       'INSERT INTO users (username, email, password, role) VALUES (?, ?, ?, ?)',
       [username, email, hashedPassword, role || 'employee']
     );
+
+    // Fire-and-forget audit log
+    logAudit({
+      entityType: 'user',
+      entityId: String(result.insertId),
+      entityName: username,
+      action: 'create',
+      userId: req.userId || null,
+      userName: req.username || null,
+      ip: getIp(req),
+      details: { email, role: role || 'employee' }
+    });
 
     res.status(201).json({
       message: 'User created successfully',

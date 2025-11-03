@@ -206,7 +206,15 @@ export default function StoreMaintenance() {
   }, [availableBranches, addedBranches, addBranchForm.chain, addBranchForm.category, addBranchForm.storeClass]);
 
   // Handle Add Modal
+  // Ensure no background element retains focus when opening modals
+  const blurActiveElement = () => {
+    if (typeof document !== 'undefined' && document.activeElement && typeof document.activeElement.blur === 'function') {
+      document.activeElement.blur();
+    }
+  };
+
   const handleOpenAddModal = () => {
+    blurActiveElement();
     setOpenAddModal(true);
     setAddBranchForm({
       chain: '',
@@ -288,6 +296,7 @@ export default function StoreMaintenance() {
 
   // --- Delete Handlers ---
   const handleOpenDialog = (row) => {
+    blurActiveElement();
     setDialogMode('single');
     setSelectedRow(row);
     setOpenDialog(true);
@@ -295,6 +304,7 @@ export default function StoreMaintenance() {
 
   const handleOpenBulkDialog = () => {
     if (selectedRows.size === 0) return;
+    blurActiveElement();
     setDialogMode('multiple');
     setOpenDialog(true);
   };
@@ -677,7 +687,7 @@ export default function StoreMaintenance() {
             {addedBranches.length > 0 && (
               <Grid item xs={12}>
                 <Typography variant="h6" gutterBottom sx={{ mt: 2 }}>
-                  Added Branches ({addedBranches.length})
+                  Added Branches
                 </Typography>
                 <TableContainer component={Paper} sx={{ maxHeight: 300 }}>
                   <Table size="small" stickyHeader>
@@ -726,7 +736,7 @@ export default function StoreMaintenance() {
             color="primary"
             disabled={addedBranches.length === 0}
           >
-            Save All Branches
+            Save All ({addedBranches.length})
           </Button>
         </DialogActions>
       </Dialog>

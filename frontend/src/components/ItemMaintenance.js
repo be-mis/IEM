@@ -210,8 +210,16 @@ export default function ItemMaintenance() {
     return availableItems.filter(item => !addedItemCodes.includes(item.itemCode));
   }, [availableItems, addedItems, addItemForm.chain, addItemForm.category, addItemForm.storeClass]);
 
+  // Ensure no background element retains focus when opening modals
+  const blurActiveElement = () => {
+    if (typeof document !== 'undefined' && document.activeElement && typeof document.activeElement.blur === 'function') {
+      document.activeElement.blur();
+    }
+  };
+
   // Handle Add Modal
   const handleOpenAddModal = () => {
+    blurActiveElement();
     setOpenAddModal(true);
     setAddItemForm({
       chain: '',
@@ -297,6 +305,7 @@ export default function ItemMaintenance() {
 
   // --- Handlers ---
   const handleOpenDialog = (row) => {
+    blurActiveElement();
     setDialogMode('single');
     setSelectedRow(row);
     setOpenDialog(true);
@@ -304,6 +313,7 @@ export default function ItemMaintenance() {
 
   const handleOpenBulkDialog = () => {
     if (selectedRows.size === 0) return;
+    blurActiveElement();
     setDialogMode('multiple');
     setOpenDialog(true);
   };

@@ -244,12 +244,13 @@ function BranchRow({ branch, items, onUpdateBranch }) {
         <TableCell style={{ paddingBottom: 0, paddingTop: 0 }} colSpan={4}>
           <Collapse in={open} timeout="auto" unmountOnExit>
             <Box sx={{ m: 1 }}>
-              <Typography variant="subtitle1" gutterBottom component="div">
+              <Typography variant="subtitle1" gutterBottom component="div" sx={{ fontWeight: 'bold' }}>
                 Excluded Items for {branch.code}
               </Typography>
 
-              <Table size="small" aria-label={`Excluded items table for ${branch.code}`}>
-                <TableHead>
+              <TableContainer component={Paper} sx={{ boxShadow: 0 }}>
+                <Table size="small" aria-label={`Excluded items table for ${branch.code}`}>
+                  <TableHead>
                   <TableRow>
                     <TableCell sx={{ width: 180 }}>Item Code</TableCell>
                     <TableCell>Item Name</TableCell>
@@ -288,7 +289,7 @@ function BranchRow({ branch, items, onUpdateBranch }) {
                   )}
                 </TableBody>
               </Table>
-
+              </TableContainer>
               <Divider sx={{ mt: 2 }} />
             </Box>
           </Collapse>
