@@ -1,92 +1,182 @@
-# 🔍 IEM System - Code Review & Error Analysis Report
-**Date:** October 29, 2025
-**Reviewer:** GitHub Copilot
+# Code Review Report - Audit Logs Alignment# 🔍 IEM System - Code Review & Error Analysis Report
 
----
+**Date:** October 29, 2025
+
+## Date: November 3, 2025**Reviewer:** GitHub Copilot
+
+
+
+## Executive Summary---
+
+Review of audit logging implementation to ensure proper alignment with the `audit_logs` table schema.
 
 ## 📊 EXECUTIVE SUMMARY
 
+---
+
 ### Issues Found: 8 Critical/High Priority Issues
-- ✅ **Fixed:** 7 issues
+
+## Audit Logs Table Schema (from migration 007)- ✅ **Fixed:** 7 issues
+
 - ⚠️ **Requires Manual Review:** 1 issue
 
-### Overall Code Quality: **GOOD** with room for improvement
-- Well-structured project organization
-- Clear separation of concerns (frontend/backend)
-- Good use of middleware and routing
-- Some database schema inconsistencies need attention
+```sql
 
----
+CREATE TABLE audit_logs (### Overall Code Quality: **GOOD** with room for improvement
 
-## 🚨 CRITICAL ISSUES (FIXED)
+  id INT(11) PRIMARY KEY AUTO_INCREMENT,- Well-structured project organization
 
-### 1. Missing Environment Configuration File ✅ FIXED
-**Severity:** CRITICAL
-**Location:** `backend/.env`
+  entity_type VARCHAR(50) NOT NULL,- Clear separation of concerns (frontend/backend)
+
+  entity_id VARCHAR(64) DEFAULT NULL,- Good use of middleware and routing
+
+  action VARCHAR(50) NOT NULL,- Some database schema inconsistencies need attention
+
+  entity_name VARCHAR(255) DEFAULT NULL,
+
+  user_id INT(11) DEFAULT NULL,---
+
+  user_name VARCHAR(100) DEFAULT NULL,
+
+  ip_address VARCHAR(45) DEFAULT NULL,## 🚨 CRITICAL ISSUES (FIXED)
+
+  details LONGTEXT (JSON validated),
+
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP### 1. Missing Environment Configuration File ✅ FIXED
+
+)**Severity:** CRITICAL
+
+```**Location:** `backend/.env`
+
 **Problem:** No `.env` file exists, database connection will fail
 
-**Impact:**
-- Server cannot connect to database
-- JWT authentication will use fallback secrets (security risk)
-- Application will crash on startup
-
-**Solution Applied:**
-Created `.env` file with proper configuration:
-```env
-DB_HOST=localhost
-DB_USER=root
-DB_PASSWORD=
-DB_NAME=item_exclusivity
-DB_PORT=3306
-JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
-PORT=5000
-NODE_ENV=development
-SERVER_IP=192.168.0.138
-```
-
-**Action Required:**
-1. ⚠️ Update `DB_PASSWORD` with your actual database password
-2. ⚠️ Change `JWT_SECRET` to a strong random string for production
-3. Verify `DB_HOST`, `DB_USER`, and `DB_NAME` match your setup
-
 ---
+
+**Impact:**
+
+## Issues Found- Server cannot connect to database
+
+- JWT authentication will use fallback secrets (security risk)
+
+### 🔴 CRITICAL ISSUES- Application will crash on startup
+
+
+
+#### 1. **inventory.js - Incorrect logAudit() Parameters****Solution Applied:**
+
+**Location:** `backend/routes/inventory.js` lines 244-263Created `.env` file with proper configuration:
+
+```env
+
+**Issue:** Using incorrect parameter names that don't match auditLogger.jsDB_HOST=localhost
+
+DB_USER=root
+
+**Current Code:**DB_PASSWORD=
+
+```javascriptDB_NAME=item_exclusivity
+
+await logAudit({DB_PORT=3306
+
+  pool,  // ❌ NOT ACCEPTED: logAudit doesn't use 'pool' parameterJWT_SECRET=your-super-secret-jwt-key-change-this-in-production
+
+  ipAddress: req.ip || req.connection.remoteAddress,  // ❌ WRONG: should be 'ip'PORT=5000
+
+  userAgent: req.get('user-agent'),  // ❌ NOT SUPPORTED: needs to be addedNODE_ENV=development
+
+});SERVER_IP=192.168.0.138
+
+``````
+
+
+
+**Expected:****Action Required:**
+
+```javascript1. ⚠️ Update `DB_PASSWORD` with your actual database password
+
+await logAudit({2. ⚠️ Change `JWT_SECRET` to a strong random string for production
+
+  ip: getIp(req),  // ✅ Correct parameter name3. Verify `DB_HOST`, `DB_USER`, and `DB_NAME` match your setup
+
+  // userAgent not yet supported - needs to be added
+
+});---
+
+```
 
 ### 2. Column Name Mapping Error in Filters Route ✅ FIXED
-**Severity:** HIGH
+
+---**Severity:** HIGH
+
 **Location:** `backend/routes/filters.js` (Line 119-125)
-**Problem:** Incorrect column name construction for exclusivity table
+
+#### 2. **auditLogger.js - Missing user_agent Column Support****Problem:** Incorrect column name construction for exclusivity table
+
+**Location:** `backend/utils/auditLogger.js`
 
 **Original Code:**
-```javascript
-const columnName = `${prefixMap[prefixKey]}${suffixMap[suffixKey]}`;
-// Creates: "vChainASEH" ❌ (Wrong!)
-```
 
-**Issue:**
-Database table `epc_item_exclusivity_list` uses columns like:
-- `vChainA`, `vChainB`, `vChainC`, etc.
+**Issue:** Table has `user_agent` column but auditLogger doesn't insert it.```javascript
+
+const columnName = `${prefixMap[prefixKey]}${suffixMap[suffixKey]}`;
+
+**Current INSERT Statement:**// Creates: "vChainASEH" ❌ (Wrong!)
+
+```javascript```
+
+INSERT INTO audit_logs 
+
+(entity_type, entity_id, action, entity_name, user_id, user_name, ip_address, details)**Issue:**
+
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)Database table `epc_item_exclusivity_list` uses columns like:
+
+```- `vChainA`, `vChainB`, `vChainC`, etc.
+
 - NOT `vChainASEH`, `vChainBSH`, etc.
 
+**Missing:** `user_agent` column
+
 **Solution Applied:**
-```javascript
+
+---```javascript
+
 // Map store class codes to single letters
-const letterSuffixMap = {
-  aseh: 'A',
+
+#### 3. **auth.js - No Audit Logging**const letterSuffixMap = {
+
+**Location:** `backend/routes/auth.js`  aseh: 'A',
+
   bsh: 'B',
-  csm: 'C',
+
+**Issue:** No audit logging for authentication events.  csm: 'C',
+
   dss: 'D',
-  eses: 'E'
-};
-const columnName = `${prefixMap[prefixKey]}${letterSuffixMap[suffixKey]}`;
-// Creates: "vChainA" ✅ (Correct!)
-```
+
+**Missing Events:**  eses: 'E'
+
+- User login (success)};
+
+- User login (failure)const columnName = `${prefixMap[prefixKey]}${letterSuffixMap[suffixKey]}`;
+
+- User registration// Creates: "vChainA" ✅ (Correct!)
+
+- Token verification```
+
+
+
+------
+
+
+
+## Recommended Fixes### 3. Missing Route Registrations ✅ FIXED
+
+**Severity:** HIGH
+
+I will now apply these fixes to align the code with the audit_logs table.**Location:** `backend/server.js`
+
+**Problem:** Dashboard and reports routes defined but never registered
 
 ---
-
-### 3. Missing Route Registrations ✅ FIXED
-**Severity:** HIGH
-**Location:** `backend/server.js`
-**Problem:** Dashboard and reports routes defined but never registered
 
 **Routes Not Working Before Fix:**
 - `/api/dashboard/*`

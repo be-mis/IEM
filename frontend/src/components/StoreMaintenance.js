@@ -22,24 +22,6 @@ const columns = [
   { id: 'action', label: 'Action', minWidth: 120 },
 ];
 
-const initialRows = [
-  { branchCode: 'C-RDS001', branchName: 'Robinson Dept Store 1' },
-  { branchCode: 'C-RDS002', branchName: 'Robinson Dept Store 2' },
-  { branchCode: 'C-RDS003', branchName: 'Robinson Dept Store 3' },
-  { branchCode: 'C-RDS004', branchName: 'Robinson Dept Store 4' },
-  { branchCode: 'C-RDS005', branchName: 'Robinson Dept Store 5' },
-  { branchCode: 'C-RDS006', branchName: 'Robinson Dept Store 6' },
-  { branchCode: 'C-RDS007', branchName: 'Robinson Dept Store 7' },
-  { branchCode: 'C-RDS008', branchName: 'Robinson Dept Store 8' },
-  { branchCode: 'C-RDS009', branchName: 'Robinson Dept Store 9' },
-  { branchCode: 'C-RDS010', branchName: 'Robinson Dept Store 10' },
-  { branchCode: 'C-RDS011', branchName: 'Robinson Dept Store 11' },
-  { branchCode: 'C-RDS012', branchName: 'Robinson Dept Store 12' },
-  { branchCode: 'C-RDS013', branchName: 'Robinson Dept Store 13' },
-  { branchCode: 'C-RDS014', branchName: 'Robinson Dept Store 14' },
-  { branchCode: 'C-RDS015', branchName: 'Robinson Dept Store 15' },
-];
-
 const rowKey = (r) => r.branchCode;
 
 export default function StoreMaintenance() {
@@ -394,7 +376,7 @@ export default function StoreMaintenance() {
           <Grid item xs={12}>
             <Paper sx={{ width: '100%', overflow: 'hidden' }}>
               {/* Search + Add Branch + Bulk Delete */}
-              <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ p: 2, gap: 2 }}>
+              <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ p: 2 }}>
                 <TextField
                   fullWidth
                   size="small"
@@ -514,7 +496,9 @@ export default function StoreMaintenance() {
                     {pagedRows.length === 0 && (
                       <TableRow>
                         <TableCell colSpan={columns.length} align="center">
-                          No results found{search ? ` for “${search}”` : ''}.
+                                          {!filterValues.chain || !filterValues.category || !filterValues.storeClass
+                                            ? 'Please select Chain, Category, and Store Classification to view stores.'
+                                            : `No results found${search ? ` for "${search}"` : ''}.`}
                         </TableCell>
                       </TableRow>
                     )}

@@ -1,9 +1,9 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   Box, Paper, TextField, IconButton, Table, TableBody, TableContainer, TableHead,
   TableRow, TableCell, TablePagination, InputAdornment, Grid, Tooltip,
   Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Button,
-  Checkbox, Stack, CircularProgress, Alert, FormControl, InputLabel, Select, MenuItem, Typography, Autocomplete
+  Checkbox, Stack, CircularProgress, Alert, FormControl, InputLabel, Select, MenuItem, Typography, Autocomplete, Snackbar
 } from '@mui/material';
 import {
   TuneOutlined, Search as SearchIcon, Clear as ClearIcon,
@@ -37,6 +37,13 @@ export default function ItemMaintenance() {
     category: '',
     storeClass: '',
     transaction: ''
+  });
+  
+  // Snackbar state for showing save feedback (consistent with ExclusivityForm)
+  const [snackbar, setSnackbar] = useState({
+    open: false,
+    message: '',
+    severity: 'success' // 'success' | 'error' | 'info' | 'warning'
   });
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(0);
@@ -122,11 +129,16 @@ export default function ItemMaintenance() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterValues.chain, filterValues.category, filterValues.storeClass]);
 
-  // Handle filter changes
-  const handleFilterChange = (filters) => {
+  // Handle filter changes (memoized to prevent infinite re-renders)
+  const handleFilterChange = useCallback((filters) => {
     setFilterValues(filters);
     setPage(0); // Reset to first page when filters change
-  };
+  }, []);
+
+  // Handle snackbar close
+  const handleCloseSnackbar = useCallback(() => {
+    setSnackbar(prev => ({ ...prev, open: false }));
+  }, []);
 
   // Fetch dropdown data for add modal
   useEffect(() => {
@@ -161,8 +173,8 @@ export default function ItemMaintenance() {
     try {
       setLoadingItems(true);
       
-      // Fetch all items from epc_item_list for the selected category
-      const response = await axios.get(`${API_BASE_URL}/filters/available-items`, {
+      // Use the new specific endpoint for item assignment
+      const response = await axios.get(`${API_BASE_URL}/filters/items-for-assignment`, {
         params: {
           chain,
           category,
@@ -171,6 +183,7 @@ export default function ItemMaintenance() {
       });
 
       setAvailableItems(response.data.items || []);
+      console.log(`Loaded ${response.data.items?.length || 0} available items for assignment`);
     } catch (err) {
       console.error('Error fetching available items:', err);
       setAvailableItems([]);
@@ -279,18 +292,27 @@ export default function ItemMaintenance() {
       return;
     }
 
+    // Find the descriptions for display
+    const chainObj = chains.find(c => c.chainCode === addItemForm.chain);
+    const categoryObj = categories.find(c => c.category.toLowerCase() === addItemForm.category);
+    const storeClassObj = storeClasses.find(sc => sc.storeClassCode === addItemForm.storeClass);
+
     const newItem = {
-      chain: addItemForm.chain,
-      category: addItemForm.category,
-      storeClass: addItemForm.storeClass,
+      chain: addItemForm.chain, // Code for backend
+      chainName: chainObj?.chainName || addItemForm.chain, // Name for display
+      category: addItemForm.category, // Code for backend
+      categoryName: categoryObj?.category || addItemForm.category, // Name for display
+      storeClass: addItemForm.storeClass, // Code for backend
+      storeClassName: storeClassObj?.storeClassification || addItemForm.storeClass, // Name for display
       itemCode: selectedItem.itemCode,
       itemName: selectedItem.itemDescription,
       id: Date.now() // Temporary ID for tracking
     };
 
     setAddedItems(prev => [...prev, newItem]);
-    
-    // Reset form
+  };
+
+  const handleClearAddForm = () => {
     setAddItemForm({
       chain: '',
       category: '',
@@ -299,8 +321,104 @@ export default function ItemMaintenance() {
     });
   };
 
-  const handleDeleteAddedItem = (itemId) => {
-    setAddedItems(prev => prev.filter(item => item.id !== itemId));
+  const handleDeleteAddedItem = async (itemId) => {
+    const itemToDelete = addedItems.find(item => item.id === itemId);
+    if (!itemToDelete) return;
+
+    try {
+      setLoading(true);
+      
+      // Build column name from selected filters
+      const columnName = `${filterValues.chain}${filterValues.storeClass}`;
+      
+      console.log('🗑️ Deleting item:', itemToDelete.itemCode, 'Column:', columnName);
+
+      // Call backend to set the column to NULL instead of deleting
+      const response = await axios.post(`${API_BASE_URL}/inventory/remove-exclusivity-item`, {
+        itemCode: itemToDelete.itemCode,
+        column: columnName
+      });
+
+      if (response.data.success) {
+        // Remove from local state only after successful backend update
+        setAddedItems(prev => prev.filter(item => item.id !== itemId));
+        
+        setSnackbar({
+          open: true,
+          message: 'Item removed successfully',
+          severity: 'success'
+        });
+      }
+    } catch (error) {
+      console.error('Error removing item:', error);
+      setSnackbar({
+        open: true,
+        message: error.response?.data?.error || 'Failed to remove item',
+        severity: 'error'
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSaveAllItems = async () => {
+    if (addedItems.length === 0) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError(null);
+
+      // Transform added items to the format expected by the backend
+      const itemsToSave = addedItems.map(item => ({
+        chain: item.chain,
+        category: item.category,
+        storeClass: item.storeClass,
+        itemCode: item.itemCode
+      }));
+
+      const response = await axios.post(`${API_BASE_URL}/inventory/add-exclusivity-items`, {
+        items: itemsToSave
+      });
+
+      // Check response status
+      if (response.status === 200 || response.status === 207) {
+        const { summary, results } = response.data;
+        
+        // Show notification using Snackbar (consistent with ExclusivityForm)
+        if (summary.success > 0) {
+          const successMsg = `Successfully saved ${summary.success} item(s) to the database!${summary.failed > 0 ? ` ${summary.failed} item(s) failed.` : ''}`;
+          setSnackbar({
+            open: true,
+            message: successMsg,
+            severity: summary.failed > 0 ? 'warning' : 'success'
+          });
+        }
+
+        // Log any failures for debugging
+        if (results.failed && results.failed.length > 0) {
+          console.error('Failed items:', results.failed);
+        }
+
+        // Clear added items and close modal
+        setAddedItems([]);
+        setOpenAddModal(false);
+
+        // Refresh the items list to show newly added items
+        await fetchItems();
+      }
+    } catch (err) {
+      console.error('Error saving items:', err);
+      // Show error notification
+      setSnackbar({
+        open: true,
+        message: err.response?.data?.error || err.message || 'Failed to save items',
+        severity: 'error'
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   // --- Handlers ---
@@ -323,20 +441,100 @@ export default function ItemMaintenance() {
     setOpenDialog(false);
   };
 
-  const handleConfirmDelete = () => {
-    if (dialogMode === 'single' && selectedRow) {
-      const key = rowKey(selectedRow);
-      setRowsState((prev) => prev.filter((r) => rowKey(r) !== key));
-      setSelectedRows((prev) => {
-        const newSet = new Set(prev);
-        newSet.delete(key);
-        return newSet;
+  const handleConfirmDelete = async () => {
+    try {
+      setLoading(true);
+      
+      if (dialogMode === 'single' && selectedRow) {
+        // Delete single row via backend
+        const key = rowKey(selectedRow);
+        const itemToDelete = rowsState.find(r => rowKey(r) === key);
+        
+        if (itemToDelete) {
+          // Build column name from selected filters
+          const columnName = `${filterValues.chain}${filterValues.storeClass}`;
+          
+          console.log('🗑️ Deleting single item:', itemToDelete.itemCode, 'Column:', columnName);
+
+          const response = await axios.post(`${API_BASE_URL}/inventory/remove-exclusivity-item`, {
+            itemCode: itemToDelete.itemCode,
+            column: columnName
+          });
+
+          if (response.data.success) {
+            setRowsState((prev) => prev.filter((r) => rowKey(r) !== key));
+            setSelectedRows((prev) => {
+              const newSet = new Set(prev);
+              newSet.delete(key);
+              return newSet;
+            });
+            
+            setSnackbar({
+              open: true,
+              message: 'Item removed successfully',
+              severity: 'success'
+            });
+          }
+        }
+      } else if (dialogMode === 'multiple') {
+        // Delete multiple rows via backend
+        const itemsToDelete = rowsState.filter((r) => selectedRows.has(rowKey(r)));
+        
+        // Build column name from selected filters
+        const columnName = `${filterValues.chain}${filterValues.storeClass}`;
+        
+        console.log('🗑️ Deleting', itemsToDelete.length, 'items, Column:', columnName);
+        
+        let successCount = 0;
+        let failCount = 0;
+
+        for (const item of itemsToDelete) {
+          try {
+            const response = await axios.post(`${API_BASE_URL}/inventory/remove-exclusivity-item`, {
+              itemCode: item.itemCode,
+              column: columnName
+            });
+
+            if (response.data.success) {
+              successCount++;
+            }
+          } catch (error) {
+            console.error('Error deleting item:', item.itemCode, error);
+            failCount++;
+          }
+        }
+
+        // Update UI after all deletions
+        if (successCount > 0) {
+          setRowsState((prev) => prev.filter((r) => !selectedRows.has(rowKey(r))));
+          setSelectedRows(new Set());
+          
+          setSnackbar({
+            open: true,
+            message: `Successfully removed ${successCount} item(s)${failCount > 0 ? `, ${failCount} failed` : ''}`,
+            severity: failCount > 0 ? 'warning' : 'success'
+          });
+        } else if (failCount > 0) {
+          setSnackbar({
+            open: true,
+            message: `Failed to remove ${failCount} item(s)`,
+            severity: 'error'
+          });
+        }
+      }
+      
+      handleCloseDialog();
+    } catch (error) {
+      console.error('Error in handleConfirmDelete:', error);
+      setSnackbar({
+        open: true,
+        message: error.response?.data?.error || 'Failed to remove item(s)',
+        severity: 'error'
       });
-    } else if (dialogMode === 'multiple') {
-      setRowsState((prev) => prev.filter((r) => !selectedRows.has(rowKey(r))));
-      setSelectedRows(new Set());
+      handleCloseDialog();
+    } finally {
+      setLoading(false);
     }
-    handleCloseDialog();
   };
 
   const handleCheckboxChange = (key) => {
@@ -417,7 +615,7 @@ export default function ItemMaintenance() {
         <Filter onChange={handleFilterChange} hideTransaction={true} />
       </Box>
 
-      {/* Error Alert */}
+      {/* Error Alert - Keep for fetch/display errors */}
       {error && (
         <Alert severity="error" onClose={() => setError(null)}>
           {error}
@@ -464,7 +662,7 @@ export default function ItemMaintenance() {
               color="primary"
               startIcon={<AddIcon />}
               onClick={handleOpenAddModal}
-              sx={{ mr: 2, minWidth: 140 }}
+              sx={{ mr: 2 }}
             >
               Add Item
             </Button>
@@ -481,7 +679,7 @@ export default function ItemMaintenance() {
           </Stack>
 
         {/* Table */}
-        <TableContainer sx={{ height: 560 }}>
+        <TableContainer sx={{ maxHeight: 560 }}>
           <Table stickyHeader aria-label="items table">
             <TableHead>
               <TableRow>
@@ -685,15 +883,25 @@ export default function ItemMaintenance() {
               </Grid>
 
               <Grid item xs={12}>
-                <Button
-                  variant="contained"
-                  color="primary"
-                  fullWidth
-                  onClick={handleAddItemToList}
-                  disabled={!addItemForm.chain || !addItemForm.category || !addItemForm.storeClass || !addItemForm.itemNumber}
-                >
-                  Add to List
-                </Button>
+                <Stack direction="row" spacing={2}>
+                  <Button
+                    variant="contained"
+                    color="primary"
+                    fullWidth
+                    onClick={handleAddItemToList}
+                    disabled={!addItemForm.chain || !addItemForm.category || !addItemForm.storeClass || !addItemForm.itemNumber}
+                  >
+                    Add to List
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    color="secondary"
+                    onClick={handleClearAddForm}
+                    sx={{ minWidth: '120px' }}
+                  >
+                    Clear
+                  </Button>
+                </Stack>
               </Grid>
             </Grid>
 
@@ -716,9 +924,9 @@ export default function ItemMaintenance() {
                     <TableBody>
                       {addedItems.map((item) => (
                         <TableRow key={item.id}>
-                          <TableCell>{item.chain}</TableCell>
-                          <TableCell>{item.category}</TableCell>
-                          <TableCell>{item.storeClass}</TableCell>
+                          <TableCell>{item.chainName}</TableCell>
+                          <TableCell>{item.categoryName}</TableCell>
+                          <TableCell>{item.storeClassName}</TableCell>
                           <TableCell>{item.itemCode}</TableCell>
                           <TableCell>{item.itemName}</TableCell>
                           <TableCell align="center">
@@ -744,12 +952,12 @@ export default function ItemMaintenance() {
             Close
           </Button>
           <Button 
-            onClick={handleCloseAddModal} 
+            onClick={handleSaveAllItems} 
             variant="contained" 
             color="success"
-            disabled={addedItems.length === 0}
+            disabled={addedItems.length === 0 || loading}
           >
-            Save All ({addedItems.length})
+            {loading ? 'Saving...' : `Save All (${addedItems.length})`}
           </Button>
         </DialogActions>
       </Dialog>
@@ -783,6 +991,23 @@ export default function ItemMaintenance() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Snackbar for feedback (consistent with ExclusivityForm) */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={3000}
+        onClose={handleCloseSnackbar}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+      >
+        <Alert 
+          onClose={handleCloseSnackbar} 
+          severity={snackbar.severity}
+          variant="filled"
+          sx={{ width: '100%' }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }

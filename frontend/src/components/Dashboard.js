@@ -11,7 +11,7 @@ import {
   Dashboard as DashboardIcon, Add as AddIcon, ViewList as ViewListIcon, CheckCircle as ReceiveIcon, Inventory2Outlined, StoreMallDirectoryOutlined,
   Assignment as AssignIcon, Assessment as ReportsIcon, Menu as MenuIcon, Inventory2, Build, AttachMoney, ExpandLessOutlined, 
   Description, TrendingUp, Warning, CheckCircleOutline, Star, AutoAwesome, TuneOutlined, AssignmentTurnedIn as Assignment, Delete,
-  Visibility as VisibilityIcon, Edit as EditIcon, Save as SaveIcon, Cancel as CancelIcon, DeleteForever as DeleteForeverIcon, DescriptionOutlined } from '@mui/icons-material';
+  Visibility as VisibilityIcon, Edit as EditIcon, Save as SaveIcon, Cancel as CancelIcon, DeleteForever as DeleteForeverIcon, DescriptionOutlined, History as HistoryIcon } from '@mui/icons-material';
 
 import { styled, createTheme, ThemeProvider } from '@mui/material/styles';
 import MuiAlert from '@mui/material/Alert';
@@ -23,6 +23,7 @@ import { useCategories, useChains, useStoreClasses } from '../hooks/useFilter';
 import ExclusivityForm from '../components/ExclusivityForm';
 import ItemMaintenance from '../components/ItemMaintenance';
 import StoreMaintenance from '../components/StoreMaintenance';
+import AuditLogs from '../components/AuditLogs';
 
 
 // Create clean white theme
@@ -197,6 +198,7 @@ const Dashboard = () => {
     { text: 'Exclusivity Form', icon: <DescriptionOutlined />, view: 'exclusivityform' },
     { text: 'Item Maintenance', icon: <Inventory2Outlined />, view: 'itemmaintenance' },
     { text: 'Branch Maintenance', icon: <StoreMallDirectoryOutlined />, view: 'storemaintenance' },
+    { text: 'Audit Logs', icon: <HistoryIcon />, view: 'auditlogs' },
     // { text: 'View Items', icon: <ViewListIcon />, view: 'view' },
     // { text: 'Assign', icon: <AssignIcon />, view: 'assign' },
     // { text: 'Receive', icon: <ReceiveIcon />, view: 'receive' },
@@ -332,6 +334,16 @@ const Dashboard = () => {
             </UltraModernCard>
           </Box>
         );
+      case 'auditlogs':
+        return (
+          <Box sx={{ mb: 4 }}>
+            <UltraModernCard>
+              <CardContent sx={{ p: 4 }}>
+                <AuditLogs />
+              </CardContent>
+            </UltraModernCard>
+          </Box>
+        );
       default:
         return (
             <UltraModernCard>
@@ -401,7 +413,7 @@ const Dashboard = () => {
         }}>
           <Snackbar
             open={snackbar.open}
-            autoHideDuration={6000}
+            autoHideDuration={3000}
             onClose={() => setSnackbar({ ...snackbar, open: false })}
           >
             <MuiAlert onClose={() => setSnackbar({ ...snackbar, open: false })} severity={snackbar.severity}>
@@ -427,7 +439,8 @@ const Dashboard = () => {
               <Typography variant="h6" sx={{ flexGrow: 1, fontWeight: '700' }}>
                 {currentView === 'exclusivityform' ? 'Exclusivity Form' :
                  currentView === 'itemmaintenance' ? 'Item Maintenance' :
-                 currentView === 'storemaintenance' ? 'Branch Maintenance' : 'Exclusivity Form'}
+                 currentView === 'storemaintenance' ? 'Branch Maintenance' :
+                 currentView === 'auditlogs' ? 'Audit Logs' : 'Exclusivity Form'}
               </Typography>
             </Toolbar>
           </ModernAppBar>

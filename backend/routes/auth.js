@@ -3,6 +3,7 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { getPool } = require('../config/database');
+const { logAudit, getIp } = require('../utils/auditLogger');
 
 const router = express.Router();
 
@@ -22,6 +23,21 @@ router.post('/login', async (req, res) => {
     );
     
     if (users.length === 0) {
+      // Log failed login attempt - user not found
+      try {
+        await logAudit({
+          entityType: 'auth',
+          entityId: null,
+          action: 'login_failed',
+          entityName: username,
+          userId: null,
+          userName: username,
+          ip: getIp(req),
+          details: { success: false, reason: 'user_not_found' }
+        });
+      } catch (auditError) {
+        console.error('Error logging failed login audit:', auditError);
+      }
       return res.status(401).json({ error: 'Invalid credentials' });
     }
     
@@ -29,6 +45,21 @@ router.post('/login', async (req, res) => {
     const validPassword = await bcrypt.compare(password, user.password);
     
     if (!validPassword) {
+      // Log failed login attempt - invalid password
+      try {
+        await logAudit({
+          entityType: 'auth',
+          entityId: user.id,
+          action: 'login_failed',
+          entityName: username,
+          userId: user.id,
+          userName: username,
+          ip: getIp(req),
+          details: { success: false, reason: 'invalid_password' }
+        });
+      } catch (auditError) {
+        console.error('Error logging failed login audit:', auditError);
+      }
       return res.status(401).json({ error: 'Invalid credentials' });
     }
     
@@ -41,6 +72,26 @@ router.post('/login', async (req, res) => {
       process.env.JWT_SECRET || 'fallback-secret',
       { expiresIn: '24h' }
     );
+    
+    // Log successful login
+    try {
+      await logAudit({
+        entityType: 'auth',
+        entityId: user.id,
+        action: 'login',
+        entityName: user.username,
+        userId: user.id,
+        userName: user.username,
+        ip: getIp(req),
+        details: { 
+          success: true, 
+          role: user.role,
+          email: user.email 
+        }
+      });
+    } catch (auditError) {
+      console.error('Error logging successful login audit:', auditError);
+    }
     
     res.json({
       token,
@@ -86,6 +137,27 @@ router.post('/register', async (req, res) => {
       INSERT INTO users (username, email, password_hash, full_name, department, role)
       VALUES (?, ?, ?, ?, ?, 'user')
     `, [username, email, hashedPassword, full_name, department || 'General']);
+    
+    // Log user registration
+    try {
+      await logAudit({
+        entityType: 'auth',
+        entityId: result.insertId,
+        action: 'register',
+        entityName: username,
+        userId: result.insertId,
+        userName: username,
+        ip: getIp(req),
+        details: { 
+          email,
+          fullName: full_name,
+          department: department || 'General',
+          role: 'user'
+        }
+      });
+    } catch (auditError) {
+      console.error('Error logging registration audit:', auditError);
+    }
     
     res.status(201).json({ 
       message: 'User created successfully',

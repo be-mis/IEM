@@ -138,7 +138,7 @@ router.get('/items', async (req, res) => {
 
     const pool = getPool();
     const query = `
-      SELECT i.itemCode, i.itemDescription, i.itemCategory
+      SELECT DISTINCT i.itemCode, i.itemDescription, i.itemCategory
       FROM epc_item_list i
       INNER JOIN epc_item_exclusivity_list e ON e.itemCode = i.itemCode
       WHERE LOWER(i.itemCategory) = ? AND e.${columnName} = 1
@@ -200,22 +200,111 @@ router.get('/available-items', async (req, res) => {
     const columnName = `${prefixMap[prefixKey]}${suffixMap[suffixKey]}`;
     const categoryLower = String(category).trim().toLowerCase();
 
-    console.log(`Fetching available items - Column: ${columnName}, Category: ${categoryLower}`);
+    console.log(`\n=== Fetching Available Items ===`);
+    console.log(`Column: ${columnName}, Category: ${categoryLower}`);
 
     const pool = getPool();
     
+    // First, let's check total items in epc_item_list for this category
+    const [totalItems] = await pool.execute(
+      `SELECT DISTINCT itemCode, itemDescription FROM epc_item_list WHERE LOWER(itemCategory) = ?`,
+      [categoryLower]
+    );
+    console.log(`Total DISTINCT items in epc_item_list for category '${categoryLower}': ${totalItems.length}`);
+    console.log('All items:', totalItems.map(i => `${i.itemCode} - ${i.itemDescription}`).join('\n  '));
+    
+    // Check which items exist in exclusivity list
+    const [exclusivityItems] = await pool.execute(
+      `SELECT itemCode, ${columnName} as columnValue FROM epc_item_exclusivity_list WHERE itemCode IN (${totalItems.map(() => '?').join(',')})`,
+      totalItems.map(i => i.itemCode)
+    );
+    console.log(`Items in epc_item_exclusivity_list: ${exclusivityItems.length}`);
+    console.log('Exclusivity items:', exclusivityItems.map(e => `${e.itemCode}(${e.columnValue})`).join(', '));
+    
     // Get all items from epc_item_list for this category
-    // that either don't exist in exclusivity list OR have the column set to 'NA'
+    // Show items that are NOT currently assigned (column value != 1)
+    // This includes: items not in exclusivity table, or items where the column is not 1
     const query = `
-      SELECT i.itemCode, i.itemDescription, i.itemCategory
+      SELECT DISTINCT i.itemCode, i.itemDescription, i.itemCategory, e.${columnName} as columnValue, e.itemCode as existsInExclusivity
       FROM epc_item_list i
-      LEFT JOIN epc_item_exclusivity_list e ON e.itemCode = i.itemCode
+      LEFT JOIN epc_item_exclusivity_list e ON i.itemCode = e.itemCode
       WHERE LOWER(i.itemCategory) = ? 
-        AND (e.itemCode IS NULL OR e.${columnName} = 'NA' OR e.${columnName} IS NULL)
+        AND (e.itemCode IS NULL OR e.${columnName} IS NULL OR e.${columnName} != 1)
       ORDER BY i.itemCode ASC
     `;
 
     const [rows] = await pool.execute(query, [categoryLower]);
+    
+    console.log(`Available items returned: ${rows.length}`);
+    console.log('Items:', rows.map(r => `${r.itemCode} (exists:${r.existsInExclusivity ? 'yes' : 'no'}, ${columnName}=${r.columnValue})`).join(', '));
+    console.log(`================================\n`);
+    
+    const response = {
+      items: rows.map(r => ({
+        itemCode: r.itemCode,
+        itemDescription: r.itemDescription,
+        itemCategory: r.itemCategory
+      }))
+    };
+    
+    console.log(`Returning ${response.items.length} items to frontend\n`);
+    res.json(response);
+  } catch (err) {
+    console.error('GET /filters/available-items error:', err);
+    res.status(500).json({ error: 'Failed to fetch available items' });
+  }
+});
+
+// GET /api/filters/items-for-assignment - New endpoint specifically for Item Maintenance
+// Returns all items from epc_item_list that are available for assignment
+router.get('/items-for-assignment', async (req, res) => {
+  try {
+    const { chain, storeClass, category } = req.query;
+    
+    if (!chain || !storeClass || !category) {
+      return res.status(400).json({ error: 'Missing required parameters: chain, storeClass, category' });
+    }
+
+    // Build column name
+    const prefixMap = { vchain: 'vChain', smh: 'sMH', oh: 'oH' };
+    const suffixMap = { aseh: 'ASEH', bsh: 'BSH', csm: 'CSM', dss: 'DSS', eses: 'ESES' };
+    
+    const prefixKey = String(chain).trim().toLowerCase();
+    const suffixKey = String(storeClass).trim().toLowerCase();
+    
+    if (!prefixMap[prefixKey] || !suffixMap[suffixKey]) {
+      return res.status(400).json({ error: 'Invalid chain or storeClass' });
+    }
+    
+    const columnName = `${prefixMap[prefixKey]}${suffixMap[suffixKey]}`;
+    const categoryLower = String(category).trim().toLowerCase();
+    
+    console.log(`\n=== Items for Assignment ===`);
+    console.log(`Column: ${columnName}, Category: ${categoryLower}`);
+    
+    const pool = getPool();
+    
+    // Logic: 
+    // - Show ALL items from epc_item_list for the category (whether they exist in exclusivity or not)
+    // - ONLY hide items where they exist in epc_item_exclusivity_list AND columnName = 1
+    const query = `
+      SELECT DISTINCT 
+        i.itemCode, 
+        i.itemDescription, 
+        i.itemCategory,
+        e.${columnName} as columnValue
+      FROM epc_item_list i
+      LEFT JOIN epc_item_exclusivity_list e ON i.itemCode = e.itemCode
+      WHERE LOWER(i.itemCategory) = ?
+        AND (e.${columnName} IS NULL OR e.${columnName} != 1)
+      ORDER BY i.itemCode ASC
+    `;
+    
+    const [rows] = await pool.execute(query, [categoryLower]);
+    
+    console.log(`Found ${rows.length} available items (excluded items where ${columnName} = 1)`);
+    console.log('Items:', rows.map(r => `${r.itemCode}(${columnName}=${r.columnValue || 'null'})`).join(', '));
+    console.log(`============================\n`);
     
     res.json({
       items: rows.map(r => ({
@@ -224,9 +313,10 @@ router.get('/available-items', async (req, res) => {
         itemCategory: r.itemCategory
       }))
     });
+    
   } catch (err) {
-    console.error('GET /filters/available-items error:', err);
-    res.status(500).json({ error: 'Failed to fetch available items' });
+    console.error('GET /filters/items-for-assignment error:', err);
+    res.status(500).json({ error: 'Failed to fetch items for assignment' });
   }
 });
 

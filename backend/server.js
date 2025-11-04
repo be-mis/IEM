@@ -7,6 +7,7 @@ const authRoutes = require('./routes/auth');
 const filtersRoutes = require('./routes/filters');
 const dashboardRoutes = require('./routes/dashboard');
 const reportsRoutes = require('./routes/reports');
+const auditRoutes = require('./routes/audit');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -47,6 +48,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/filters', filtersRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/reports', reportsRoutes);
+app.use('/api/audit', auditRoutes);
 
 
 // Root endpoint

@@ -432,7 +432,7 @@ export default function ListOfExclusion(props) {
         />
       </Box>
 
-      <TableContainer sx={{ height: 400 }}>
+      <TableContainer sx={{ maxheight: 400 }}>
         <Table aria-label="Branch exclusions table" stickyHeader>
           <TableHead>
             <TableRow>
@@ -459,7 +459,7 @@ export default function ListOfExclusion(props) {
             {pagedBranches.length === 0 && (
               <TableRow>
                 <TableCell colSpan={4}>
-                  <Typography variant="body2" color="text.secondary">
+                  <Typography variant="body2" align="center">
                     No branches found{debouncedSearch ? ` for "${debouncedSearch}"` : ''}.
                   </Typography>
                 </TableCell>

@@ -151,7 +151,9 @@ export default function StickyHeadTable({ filters, quantities = {}, setQuantitie
               );
             })}
             {!loading && pagedRows.length === 0 && (
-              <TableRow><TableCell colSpan={columns.length}>No results found{search ? ` for “${search}”` : ''}.</TableCell></TableRow>
+              <TableRow>
+                <TableCell colSpan={columns.length} align="center">No results found{search ? ` for “${search}”` : ''}.</TableCell>
+              </TableRow>
             )}
           </TableBody>
         </Table>

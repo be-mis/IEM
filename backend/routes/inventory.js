@@ -2,6 +2,7 @@
 const express = require('express');
 const router = express.Router();
 const { getPool } = require('../config/database');
+const { logAudit, getIp } = require('../utils/auditLogger');
 
 // GET /api/inventory/items - Get all items with filtering (FIXED)
 router.get('/items', async (req, res) => {
@@ -189,6 +190,26 @@ router.put('/items/:id/dispose', async (req, res) => {
       return res.status(404).json({ error: 'Item not found' });
     }
     
+    // Log audit trail for disposal
+    try {
+      await logAudit({
+        entityType: 'item',
+        entityId: id,
+        action: 'dispose',
+        entityName: 'Item disposed',
+        userId: req.user?.id || null,
+        userName: req.user?.username || disposed_by || 'System',
+        ip: getIp(req),
+        details: {
+          reason: disposal_reason,
+          disposedBy: disposed_by || 'System',
+          disposalDate: new Date().toISOString()
+        }
+      });
+    } catch (auditError) {
+      console.error('Error logging disposal audit:', auditError);
+    }
+    
     res.json({ 
       success: true, 
       message: 'Item moved to disposal successfully' 
@@ -278,11 +299,250 @@ router.post('/items/:id/checkout', async (req, res) => {
       SELECT * FROM inventory_items WHERE id = ?
     `, [id]);
     
+    // Log audit trail for checkout
+    try {
+      await logAudit({
+        entityType: 'item',
+        entityId: id,
+        action: 'checkout',
+        entityName: `Item assigned to ${assignedToName}`,
+        userId: req.user?.id || null,
+        userName: req.user?.username || 'System',
+        ip: getIp(req),
+        details: {
+          assignedTo: assignedToName,
+          department: department || null,
+          email: email || null,
+          phone: phone || null,
+          assignmentDate: assignment_date
+        }
+      });
+    } catch (auditError) {
+      console.error('Error logging checkout audit:', auditError);
+    }
+    
     //console.log(`✅ Assigned item ID: ${id} to ${assignedToName} (${department || 'No dept'})`);
     res.json(item[0]);
   } catch (error) {
     //console.error('❌ Error assigning item:', error);
     res.status(500).json({ error: 'Failed to assign item: ' + error.message });
+  }
+});
+
+// POST /api/inventory/add-exclusivity-items - Add items to exclusivity list
+router.post('/add-exclusivity-items', async (req, res) => {
+  try {
+    const pool = getPool();
+    const { items } = req.body;
+
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ error: 'Items array is required' });
+    }
+
+    const results = {
+      success: [],
+      failed: [],
+      skipped: []
+    };
+
+    for (const item of items) {
+      try {
+        const { chain, category, storeClass, itemCode } = item;
+
+        // Validate required fields
+        if (!chain || !category || !storeClass || !itemCode) {
+          results.failed.push({
+            itemCode: itemCode || 'unknown',
+            reason: 'Missing required fields: chain, category, storeClass, or itemCode'
+          });
+          continue;
+        }
+
+        // Build column name by combining chain + storeClass (e.g., VChainASEH, SMHBSH, OHCSM)
+        const columnName = `${chain}${storeClass}`;
+
+        // Optimized INSERT using only the specific column needed
+        const upsertQuery = `
+          INSERT INTO epc_item_exclusivity_list (itemCode, ${columnName}) 
+          VALUES (?, 1)
+          ON DUPLICATE KEY UPDATE ${columnName} = 1, updated_at = CURRENT_TIMESTAMP
+        `;
+        
+        const [result] = await pool.execute(upsertQuery, [itemCode]);
+        
+        // Check if it was an insert (affectedRows = 1) or update (affectedRows = 2)
+        const action = result.affectedRows === 1 ? 'inserted' : 'updated';
+        
+        results.success.push({
+          itemCode,
+          action,
+          column: columnName
+        });
+
+      } catch (error) {
+        console.error(`Error processing item ${item.itemCode}:`, error);
+        results.failed.push({
+          itemCode: item.itemCode,
+          reason: error.message
+        });
+      }
+    }
+
+    // Log audit trail for successful additions
+    if (results.success.length > 0) {
+      try {
+        // Group by action type for cleaner logging
+        const inserted = results.success.filter(r => r.action === 'inserted');
+        const updated = results.success.filter(r => r.action === 'updated');
+
+        // Log insertions
+        if (inserted.length > 0) {
+          await logAudit({
+            entityType: 'item_exclusivity',
+            entityId: null,
+            action: 'bulk_create',
+            entityName: `${inserted.length} item(s)`,
+            userId: req.user?.id || null,
+            userName: req.user?.username || 'System',
+            ip: getIp(req),
+            details: {
+              items: inserted.map(r => ({
+                itemCode: r.itemCode,
+                column: r.column
+              })),
+              count: inserted.length
+            }
+          });
+        }
+
+        // Log updates
+        if (updated.length > 0) {
+          await logAudit({
+            entityType: 'item_exclusivity',
+            entityId: null,
+            action: 'bulk_update',
+            entityName: `${updated.length} item(s)`,
+            userId: req.user?.id || null,
+            userName: req.user?.username || 'System',
+            ip: getIp(req),
+            details: {
+              items: updated.map(r => ({
+                itemCode: r.itemCode,
+                column: r.column
+              })),
+              count: updated.length
+            }
+          });
+        }
+      } catch (auditError) {
+        // Log audit errors but don't fail the request
+        console.error('Error logging audit trail:', auditError);
+      }
+    }
+
+    const responseStatus = results.failed.length > 0 ? 207 : 200; // 207 Multi-Status if some failed
+    res.status(responseStatus).json({
+      message: 'Items processed',
+      summary: {
+        total: items.length,
+        success: results.success.length,
+        failed: results.failed.length,
+        skipped: results.skipped.length
+      },
+      results
+    });
+
+  } catch (error) {
+    console.error('Error adding exclusivity items:', error);
+    res.status(500).json({ 
+      error: 'Failed to add items',
+      message: error.message 
+    });
+  }
+});
+
+// DELETE /api/inventory/remove-exclusivity-item - Remove item from exclusivity by setting column to 0
+router.post('/remove-exclusivity-item', async (req, res) => {
+  try {
+    const pool = getPool();
+    const { itemCode, column } = req.body;
+
+    console.log('🗑️ Remove request:', { itemCode, column });
+
+    if (!itemCode || !column) {
+      return res.status(400).json({ error: 'itemCode and column are required' });
+    }
+
+    // Validate column name to prevent SQL injection (whitelist approach)
+    const validColumns = [
+      'vChainASEH', 'vChainBSH', 'vChainCSM', 'vChainDSS', 'vChainESES',
+      'sMHASEH', 'sMHBSH', 'sMHCSM', 'sMHDSS', 'sMHESES',
+      'oHASEH', 'oHBSH', 'oHCSM', 'oHDSS', 'oHESES'
+    ];
+
+    if (!validColumns.includes(column)) {
+      console.error('❌ Invalid column name received:', {
+        received: column,
+        receivedLength: column.length,
+        receivedChars: column.split('').map((c, i) => `${i}:${c}(${c.charCodeAt(0)})`),
+        validColumns: validColumns
+      });
+      return res.status(400).json({ 
+        error: 'Invalid column name. Column name must match one of the valid database columns.',
+        received: column,
+        validColumns: validColumns,
+        hint: 'Valid format: chainCode + storeClassCode (e.g., vChainASEH, sMHBSH, oHCSM)'
+      });
+    }
+
+    // Update the specific column to 0 instead of deleting the row
+    const updateQuery = `
+      UPDATE epc_item_exclusivity_list 
+      SET ${column} = 0, updated_at = CURRENT_TIMESTAMP
+      WHERE itemCode = ?
+    `;
+    
+    console.log('📝 Executing query:', updateQuery, 'with itemCode:', itemCode);
+    const [result] = await pool.execute(updateQuery, [itemCode]);
+    console.log('✅ Update result:', result);
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'Item not found in database' });
+    }
+
+    // Log audit trail for removal
+    try {
+      await logAudit({
+        entityType: 'item_exclusivity',
+        entityId: itemCode,
+        action: 'remove',
+        entityName: `Removed ${column} from ${itemCode}`,
+        userId: req.user?.id || null,
+        userName: req.user?.username || 'System',
+        ip: getIp(req),
+        details: {
+          itemCode,
+          column,
+          action: 'set_to_zero'
+        }
+      });
+    } catch (auditError) {
+      console.error('Error logging removal audit:', auditError);
+    }
+
+    res.json({ 
+      success: true, 
+      message: 'Item exclusivity removed successfully',
+      itemCode,
+      column
+    });
+
+  } catch (error) {
+    console.error('Error removing exclusivity item:', error);
+    res.status(500).json({ 
+      error: 'Failed to remove item',
+      message: error.message 
+    });
   }
 });
 

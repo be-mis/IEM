@@ -8,6 +8,7 @@ import ViewItems from './components/ViewItems';
 import CheckOutItem from './components/CheckOutItem';
 import CheckInItem from './components/CheckInItem';
 import Reports from './components/Reports';
+import AuditLogs from './components/AuditLogs';
 import './App.css';
 
 // Create Material-UI theme
@@ -43,6 +44,7 @@ function App() {
             <Route path="/check-out" element={<CheckOutItem />} />
             <Route path="/check-in" element={<CheckInItem />} />
             <Route path="/reports" element={<Reports />} />
+            <Route path="/audit-logs" element={<AuditLogs />} />
           </Routes>
         </div>
       </Router>

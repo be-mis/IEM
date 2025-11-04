@@ -151,7 +151,7 @@ export default function StickyHeadTable({ filters }) {
 
             {pagedRows.length === 0 && (
               <TableRow>
-                <TableCell colSpan={columns.length}>
+                <TableCell colSpan={columns.length} align="center">
                   No results found{search ? ` for “${search}”` : ''}.
                 </TableCell>
               </TableRow>
