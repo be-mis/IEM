@@ -473,12 +473,16 @@ router.post('/remove-exclusivity-item', async (req, res) => {
       return res.status(400).json({ error: 'itemCode and column are required' });
     }
 
-    // Validate column name to prevent SQL injection (whitelist approach)
-    const validColumns = [
-      'vChainASEH', 'vChainBSH', 'vChainCSM', 'vChainDSS', 'vChainESES',
-      'sMHASEH', 'sMHBSH', 'sMHCSM', 'sMHDSS', 'sMHESES',
-      'oHASEH', 'oHBSH', 'oHCSM', 'oHDSS', 'oHESES'
-    ];
+    // Dynamically fetch valid columns from the database
+    const [columns] = await pool.execute(`
+      SELECT COLUMN_NAME 
+      FROM INFORMATION_SCHEMA.COLUMNS 
+      WHERE TABLE_SCHEMA = DATABASE() 
+        AND TABLE_NAME = 'epc_item_exclusivity_list'
+        AND COLUMN_NAME NOT IN ('itemCode', 'created_at', 'updated_at')
+    `);
+    
+    const validColumns = columns.map(col => col.COLUMN_NAME);
 
     if (!validColumns.includes(column)) {
       console.error('❌ Invalid column name received:', {
@@ -541,6 +545,147 @@ router.post('/remove-exclusivity-item', async (req, res) => {
     console.error('Error removing exclusivity item:', error);
     res.status(500).json({ 
       error: 'Failed to remove item',
+      message: error.message 
+    });
+  }
+});
+
+// POST /api/inventory/add-exclusivity-branches - Add branches to exclusivity list
+router.post('/add-exclusivity-branches', async (req, res) => {
+  try {
+    const pool = getPool();
+    const { branches } = req.body;
+
+    if (!branches || !Array.isArray(branches) || branches.length === 0) {
+      return res.status(400).json({ error: 'Branches array is required' });
+    }
+
+    // Dynamically fetch valid category columns from the database (once, outside the loop)
+    const [categoryColumns] = await pool.execute(`
+      SELECT COLUMN_NAME 
+      FROM INFORMATION_SCHEMA.COLUMNS 
+      WHERE TABLE_SCHEMA = DATABASE() 
+        AND TABLE_NAME = 'epc_branches'
+        AND COLUMN_NAME LIKE '%Class'
+        AND COLUMN_NAME NOT IN ('chainCode', 'created_at', 'updated_at')
+    `);
+    
+    // Create a map of category name to column name for O(1) lookup
+    // e.g., { 'lamps': 'lampsClass', 'decors': 'decorsClass', ... }
+    const categoryColumnMap = {};
+    categoryColumns.forEach(col => {
+      const columnName = col.COLUMN_NAME;
+      // Extract category name by removing 'Class' suffix (e.g., 'lampsClass' -> 'lamps')
+      const categoryName = columnName.replace(/Class$/, '').toLowerCase();
+      categoryColumnMap[categoryName] = columnName;
+    });
+
+    const results = {
+      success: [],
+      failed: [],
+      skipped: []
+    };
+
+    for (const branch of branches) {
+      try {
+        const { chain, category, storeClass, branchCode } = branch;
+
+        // Validate required fields
+        if (!chain || !category || !storeClass || !branchCode) {
+          results.failed.push({
+            branchCode: branchCode || 'unknown',
+            reason: 'Missing required fields: chain, category, storeClass, or branchCode'
+          });
+          continue;
+        }
+
+        // Determine the category column name dynamically using the map
+        const categoryLower = category.toLowerCase();
+        const categoryColumn = categoryColumnMap[categoryLower];
+        
+        if (!categoryColumn) {
+          results.failed.push({
+            branchCode,
+            reason: `Invalid category: ${category}. Valid categories: ${Object.keys(categoryColumnMap).join(', ')}`
+          });
+          continue;
+        }
+
+        // Update the branch's category column with the store classification
+        const updateQuery = `
+          UPDATE epc_branches 
+          SET ${categoryColumn} = ?, updated_at = CURRENT_TIMESTAMP
+          WHERE branchCode = ?
+        `;
+        
+        const [result] = await pool.execute(updateQuery, [storeClass, branchCode]);
+        
+        if (result.affectedRows === 0) {
+          results.failed.push({
+            branchCode,
+            reason: 'Branch not found'
+          });
+          continue;
+        }
+
+        results.success.push({
+          branchCode,
+          category,
+          storeClass,
+          column: categoryColumn
+        });
+
+      } catch (error) {
+        console.error(`Error processing branch ${branch.branchCode}:`, error);
+        results.failed.push({
+          branchCode: branch.branchCode,
+          reason: error.message
+        });
+      }
+    }
+
+    // Log audit trail for successful additions
+    if (results.success.length > 0) {
+      try {
+        await logAudit({
+          entityType: 'branch_exclusivity',
+          entityId: null,
+          action: 'bulk_assign',
+          entityName: `${results.success.length} branch(es)`,
+          userId: req.user?.id || null,
+          userName: req.user?.username || 'System',
+          ip: getIp(req),
+          details: {
+            branches: results.success.map(r => ({
+              branchCode: r.branchCode,
+              category: r.category,
+              storeClass: r.storeClass,
+              column: r.column
+            })),
+            count: results.success.length
+          }
+        });
+      } catch (auditError) {
+        console.error('Error logging audit trail:', auditError);
+      }
+    }
+
+    const responseStatus = results.failed.length > 0 ? 207 : 200; // 207 Multi-Status if some failed
+    res.status(responseStatus).json({
+      message: 'Branches processed',
+      summary: {
+        total: branches.length,
+        success: results.success.length,
+        failed: results.failed.length,
+        skipped: results.skipped.length
+      },
+      results
+    });
+
+  } catch (error) {
+    console.error('Error adding exclusivity branches:', error);
+    res.status(500).json({ 
+      error: 'Failed to add branches',
       message: error.message 
     });
   }

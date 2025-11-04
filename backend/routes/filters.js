@@ -277,41 +277,30 @@ router.get('/items-for-assignment', async (req, res) => {
     }
     
     const columnName = `${prefixMap[prefixKey]}${suffixMap[suffixKey]}`;
-    const categoryLower = String(category).trim().toLowerCase();
+    // Capitalize first letter of category (e.g., "decors" -> "Decors")
+    const categoryValue = String(category).trim();
+    const categoryCapitalized = categoryValue.charAt(0).toUpperCase() + categoryValue.slice(1).toLowerCase();
     
     console.log(`\n=== Items for Assignment ===`);
-    console.log(`Column: ${columnName}, Category: ${categoryLower}`);
+    console.log(`Column: ${columnName}, Category: ${categoryCapitalized}`);
     
     const pool = getPool();
     
-    // Logic: 
-    // - Show ALL items from epc_item_list for the category (whether they exist in exclusivity or not)
-    // - ONLY hide items where they exist in epc_item_exclusivity_list AND columnName = 1
-    const query = `
-      SELECT DISTINCT 
-        i.itemCode, 
-        i.itemDescription, 
-        i.itemCategory,
-        e.${columnName} as columnValue
-      FROM epc_item_list i
-      LEFT JOIN epc_item_exclusivity_list e ON i.itemCode = e.itemCode
-      WHERE LOWER(i.itemCategory) = ?
-        AND (e.${columnName} IS NULL OR e.${columnName} != 1)
-      ORDER BY i.itemCode ASC
-    `;
+    // Step 1: Fetch ALL items from epc_item_list based on selected category ONLY
+    const [allItems] = await pool.execute(
+      `SELECT DISTINCT itemCode, itemDescription, itemCategory 
+       FROM epc_item_list 
+       WHERE itemCategory = ?
+       ORDER BY itemCode ASC`,
+      [categoryCapitalized]
+    );
     
-    const [rows] = await pool.execute(query, [categoryLower]);
-    
-    console.log(`Found ${rows.length} available items (excluded items where ${columnName} = 1)`);
-    console.log('Items:', rows.map(r => `${r.itemCode}(${columnName}=${r.columnValue || 'null'})`).join(', '));
+    console.log(`Found ${allItems.length} total items in epc_item_list for category '${categoryCapitalized}'`);
+    console.log(`Items: ${allItems.map(i => i.itemCode).join(', ')}`);
     console.log(`============================\n`);
     
     res.json({
-      items: rows.map(r => ({
-        itemCode: r.itemCode,
-        itemDescription: r.itemDescription,
-        itemCategory: r.itemCategory
-      }))
+      items: allItems
     });
     
   } catch (err) {

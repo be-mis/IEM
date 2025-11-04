@@ -49,6 +49,10 @@ export default function ItemMaintenance() {
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [quantities, setQuantities] = useState({});
+  
+  // Pagination for added items table in modal
+  const [addedItemsPage, setAddedItemsPage] = useState(0);
+  const [addedItemsRowsPerPage, setAddedItemsRowsPerPage] = useState(5);
 
   // Selection + delete dialog states
   const [selectedRows, setSelectedRows] = useState(new Set());
@@ -58,6 +62,7 @@ export default function ItemMaintenance() {
 
   // Add Item Modal states
   const [openAddModal, setOpenAddModal] = useState(false);
+  const [openCloseConfirmDialog, setOpenCloseConfirmDialog] = useState(false);
   const [addItemForm, setAddItemForm] = useState({
     chain: '',
     category: '',
@@ -243,6 +248,23 @@ export default function ItemMaintenance() {
   };
 
   const handleCloseAddModal = () => {
+    // Check if there's any data in the form or added items
+    const hasFormData = addItemForm.chain || addItemForm.category || addItemForm.storeClass || addItemForm.itemNumber;
+    const hasAddedItems = addedItems.length > 0;
+    
+    if (hasFormData || hasAddedItems) {
+      // Show confirmation dialog
+      setOpenCloseConfirmDialog(true);
+      return;
+    }
+    
+    // No data, just close
+    setOpenAddModal(false);
+  };
+
+  const handleConfirmCloseAddModal = () => {
+    // Clear everything and close
+    setOpenCloseConfirmDialog(false);
     setOpenAddModal(false);
     setAddItemForm({
       chain: '',
@@ -250,6 +272,11 @@ export default function ItemMaintenance() {
       storeClass: '',
       itemNumber: ''
     });
+    setAddedItems([]);
+  };
+
+  const handleCancelCloseAddModal = () => {
+    setOpenCloseConfirmDialog(false);
   };
 
   const handleAddItemFormChange = (field) => (event) => {
@@ -773,8 +800,14 @@ export default function ItemMaintenance() {
       )}
 
       {/* Add Item Modal */}
-      <Dialog open={openAddModal} onClose={handleCloseAddModal} maxWidth="md" fullWidth>
-        <DialogTitle>Add New Item</DialogTitle>
+      <Dialog 
+        open={openAddModal} 
+        onClose={() => {}} 
+        disableEscapeKeyDown
+        maxWidth="md" 
+        fullWidth
+      >
+        <DialogTitle>Add Item</DialogTitle>
         <DialogContent>
           <Box sx={{ pt: 2 }}>
             <Grid container spacing={3}>
@@ -922,26 +955,40 @@ export default function ItemMaintenance() {
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {addedItems.map((item) => (
-                        <TableRow key={item.id}>
-                          <TableCell>{item.chainName}</TableCell>
-                          <TableCell>{item.categoryName}</TableCell>
-                          <TableCell>{item.storeClassName}</TableCell>
-                          <TableCell>{item.itemCode}</TableCell>
-                          <TableCell>{item.itemName}</TableCell>
-                          <TableCell align="center">
-                            <IconButton
-                              color="error"
-                              size="small"
-                              onClick={() => handleDeleteAddedItem(item.id)}
-                            >
-                              <DeleteForeverIcon />
-                            </IconButton>
-                          </TableCell>
-                        </TableRow>
-                      ))}
+                      {addedItems
+                        .slice(addedItemsPage * addedItemsRowsPerPage, addedItemsPage * addedItemsRowsPerPage + addedItemsRowsPerPage)
+                        .map((item) => (
+                          <TableRow key={item.id}>
+                            <TableCell>{item.chainName}</TableCell>
+                            <TableCell>{item.categoryName}</TableCell>
+                            <TableCell>{item.storeClassName}</TableCell>
+                            <TableCell>{item.itemCode}</TableCell>
+                            <TableCell>{item.itemName}</TableCell>
+                            <TableCell align="center">
+                              <IconButton
+                                color="error"
+                                size="small"
+                                onClick={() => handleDeleteAddedItem(item.id)}
+                              >
+                                <DeleteForeverIcon />
+                              </IconButton>
+                            </TableCell>
+                          </TableRow>
+                        ))}
                     </TableBody>
                   </Table>
+                  <TablePagination
+                    rowsPerPageOptions={[5, 10, 25]}
+                    component="div"
+                    count={addedItems.length}
+                    rowsPerPage={addedItemsRowsPerPage}
+                    page={addedItemsPage}
+                    onPageChange={(e, newPage) => setAddedItemsPage(newPage)}
+                    onRowsPerPageChange={(e) => {
+                      setAddedItemsRowsPerPage(+e.target.value);
+                      setAddedItemsPage(0);
+                    }}
+                  />
                 </TableContainer>
               </Box>
             )}
@@ -988,6 +1035,24 @@ export default function ItemMaintenance() {
           </Button>
           <Button onClick={handleConfirmDelete} color="error" variant="contained">
             Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Close Add Modal Confirmation Dialog */}
+      <Dialog open={openCloseConfirmDialog} onClose={handleCancelCloseAddModal}>
+        <DialogTitle>Confirm Close</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            You have unsaved data. All inputs and added items will be cleared. Do you want to continue?
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCancelCloseAddModal} color="inherit">
+            No
+          </Button>
+          <Button onClick={handleConfirmCloseAddModal} color="primary" variant="contained">
+            Yes
           </Button>
         </DialogActions>
       </Dialog>

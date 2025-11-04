@@ -1,10 +1,10 @@
 import * as React from 'react';
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   Box, Paper, TextField, Grid, IconButton, Table, TableBody, TableContainer,
   TableHead, TableRow, TableCell, TablePagination, Tooltip, InputAdornment,
   Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Button,
-  Checkbox, Stack, CircularProgress, Alert, FormControl, InputLabel, Select, MenuItem, Typography, Autocomplete
+  Checkbox, Stack, CircularProgress, Alert, FormControl, InputLabel, Select, MenuItem, Typography, Autocomplete, Snackbar
 } from '@mui/material';
 import {
   TuneOutlined, Search as SearchIcon, Clear as ClearIcon,
@@ -28,6 +28,11 @@ export default function StoreMaintenance() {
   const [rowsState, setRowsState] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [snackbar, setSnackbar] = useState({
+    open: false,
+    message: '',
+    severity: 'success' // 'success' | 'error' | 'info' | 'warning'
+  });
   const [filterValues, setFilterValues] = useState({
     chain: '',
     category: '',
@@ -36,6 +41,10 @@ export default function StoreMaintenance() {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
+  
+  // Pagination for added branches table in modal
+  const [addedBranchesPage, setAddedBranchesPage] = useState(0);
+  const [addedBranchesRowsPerPage, setAddedBranchesRowsPerPage] = useState(5);
 
   const [selectedRows, setSelectedRows] = useState(new Set());
   const [openDialog, setOpenDialog] = useState(false);
@@ -53,6 +62,7 @@ export default function StoreMaintenance() {
   const [availableBranches, setAvailableBranches] = useState([]);
   const [loadingBranches, setLoadingBranches] = useState(false);
   const [addedBranches, setAddedBranches] = useState([]);
+  const [openCloseConfirmDialog, setOpenCloseConfirmDialog] = useState(false);
   
   // Fetch data for dropdowns in add modal
   const [chains, setChains] = useState([]);
@@ -106,6 +116,11 @@ export default function StoreMaintenance() {
     setFilterValues(filters);
     setPage(0);
   };
+
+  // Snackbar handler
+  const handleCloseSnackbar = useCallback(() => {
+    setSnackbar(prev => ({ ...prev, open: false }));
+  }, []);
 
   // Fetch dropdown data for add modal
   useEffect(() => {
@@ -207,7 +222,38 @@ export default function StoreMaintenance() {
   };
 
   const handleCloseAddModal = () => {
+    // Check if there's any data in the form or added branches
+    const hasFormData = addBranchForm.chain || addBranchForm.category || addBranchForm.storeClass || addBranchForm.branchCode;
+    const hasAddedBranches = addedBranches.length > 0;
+    
+    if (hasFormData || hasAddedBranches) {
+      // Show confirmation dialog
+      setOpenCloseConfirmDialog(true);
+      return;
+    }
+    
+    // No data, just close
     setOpenAddModal(false);
+  };
+
+  const handleConfirmCloseAddModal = () => {
+    // Clear everything and close
+    setOpenCloseConfirmDialog(false);
+    setOpenAddModal(false);
+    setAddBranchForm({
+      chain: '',
+      category: '',
+      storeClass: '',
+      branchCode: ''
+    });
+    setAddedBranches([]);
+  };
+
+  const handleCancelCloseAddModal = () => {
+    setOpenCloseConfirmDialog(false);
+  };
+
+  const handleClearAddForm = () => {
     setAddBranchForm({
       chain: '',
       category: '',
@@ -253,10 +299,20 @@ export default function StoreMaintenance() {
       return;
     }
 
+    // Find the descriptions from the dropdown data
+    const selectedChain = chains.find(c => c.chainCode === addBranchForm.chain);
+    const selectedCategory = categories.find(cat => 
+      (cat.category?.toLowerCase() === addBranchForm.category || cat.catCode?.toLowerCase() === addBranchForm.category)
+    );
+    const selectedStoreClass = storeClasses.find(sc => sc.storeClassCode === addBranchForm.storeClass);
+
     const newBranch = {
       chain: addBranchForm.chain,
+      chainName: selectedChain?.chainName || addBranchForm.chain,
       category: addBranchForm.category,
+      categoryName: selectedCategory?.category || selectedCategory?.catCode || addBranchForm.category,
       storeClass: addBranchForm.storeClass,
+      storeClassName: selectedStoreClass?.storeClassification || addBranchForm.storeClass,
       branchCode: selectedBranch.branchCode,
       branchName: selectedBranch.branchName,
       id: Date.now()
@@ -264,16 +320,83 @@ export default function StoreMaintenance() {
 
     setAddedBranches(prev => [...prev, newBranch]);
     
-    setAddBranchForm({
-      chain: '',
-      category: '',
-      storeClass: '',
+    // Only clear branchCode, keep chain, category, and storeClass for easy multiple additions
+    setAddBranchForm(prev => ({
+      ...prev,
       branchCode: ''
-    });
+    }));
   };
 
   const handleDeleteAddedBranch = (branchId) => {
     setAddedBranches(prev => prev.filter(branch => branch.id !== branchId));
+  };
+
+  const handleSaveAllBranches = async () => {
+    if (addedBranches.length === 0) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError(null);
+
+      // Prepare branches for API
+      const branchesToSave = addedBranches.map(branch => ({
+        chain: branch.chain,
+        category: branch.category,
+        storeClass: branch.storeClass,
+        branchCode: branch.branchCode
+      }));
+
+      // Call API to save branches
+      const response = await axios.post(
+        `${API_BASE_URL}/inventory/add-exclusivity-branches`,
+        { branches: branchesToSave }
+      );
+
+      // Check response status
+      if (response.status === 200 || response.status === 207) {
+        const { summary, results } = response.data;
+        
+        // Show notification using Snackbar
+        if (summary.success > 0) {
+          const successMsg = `Successfully saved ${summary.success} branch(es) to the database!${summary.failed > 0 ? ` ${summary.failed} branch(es) failed.` : ''}`;
+          setSnackbar({
+            open: true,
+            message: successMsg,
+            severity: summary.failed > 0 ? 'warning' : 'success'
+          });
+        }
+
+        // Log any failures for debugging
+        if (results.failed && results.failed.length > 0) {
+          console.error('Failed branches:', results.failed);
+        }
+
+        // Clear added branches and close modal (no confirmation needed)
+        setAddedBranches([]);
+        setOpenAddModal(false);
+        setAddBranchForm({
+          chain: '',
+          category: '',
+          storeClass: '',
+          branchCode: ''
+        });
+
+        // Refresh the branches list
+        await fetchBranches();
+      }
+    } catch (err) {
+      console.error('Error saving branches:', err);
+      // Show error notification
+      setSnackbar({
+        open: true,
+        message: err.response?.data?.error || err.message || 'Failed to save branches',
+        severity: 'error'
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   // --- Delete Handlers ---
@@ -435,7 +558,7 @@ export default function StoreMaintenance() {
               )}
 
               {/* Table */}
-              <TableContainer sx={{ height: 560 }}>
+              <TableContainer sx={{ maxHeight: 560 }}>
                 <Table stickyHeader aria-label="branches table">
                   <TableHead>
                     <TableRow>
@@ -551,7 +674,13 @@ export default function StoreMaintenance() {
       </Dialog>
 
       {/* Add Branch Modal */}
-      <Dialog open={openAddModal} onClose={handleCloseAddModal} maxWidth="md" fullWidth>
+      <Dialog 
+        open={openAddModal} 
+        onClose={() => {}} 
+        disableEscapeKeyDown
+        maxWidth="md" 
+        fullWidth
+      >
         <DialogTitle>Add Branch</DialogTitle>
         <DialogContent>
           <Grid container spacing={2} sx={{ mt: 1 }}>
@@ -567,7 +696,7 @@ export default function StoreMaintenance() {
                   <MenuItem value="">Select Chain</MenuItem>
                   {chains.map(chain => (
                     <MenuItem key={chain.chainCode} value={chain.chainCode}>
-                      {chain.chainCode} - {chain.chainName}
+                      {chain.chainName}
                     </MenuItem>
                   ))}
                 </Select>
@@ -655,57 +784,82 @@ export default function StoreMaintenance() {
               />
             </Grid>
 
-            {/* Add to List Button */}
+            {/* Add to List and Clear Buttons */}
             <Grid item xs={12}>
-              <Button
-                fullWidth
-                variant="contained"
-                onClick={handleAddBranchToList}
-                disabled={!addBranchForm.chain || !addBranchForm.category || !addBranchForm.storeClass || !addBranchForm.branchCode}
-              >
-                Add to List
-              </Button>
+              <Stack direction="row" spacing={2}>
+                <Button
+                  variant="contained"
+                  color="primary"
+                  fullWidth
+                  onClick={handleAddBranchToList}
+                  disabled={!addBranchForm.chain || !addBranchForm.category || !addBranchForm.storeClass || !addBranchForm.branchCode}
+                >
+                  Add to List
+                </Button>
+                <Button
+                  variant="outlined"
+                  color="secondary"
+                  onClick={handleClearAddForm}
+                  sx={{ minWidth: '120px' }}
+                >
+                  Clear
+                </Button>
+              </Stack>
             </Grid>
 
             {/* Added Branches Table */}
             {addedBranches.length > 0 && (
               <Grid item xs={12}>
-                <Typography variant="h6" gutterBottom sx={{ mt: 2 }}>
+                <Typography variant="h6" sx={{ mt: 4, mb: 2 }}>
                   Added Branches
                 </Typography>
-                <TableContainer component={Paper} sx={{ maxHeight: 300 }}>
-                  <Table size="small" stickyHeader>
+                <TableContainer component={Paper} variant="outlined">
+                  <Table size="small">
                     <TableHead>
                       <TableRow>
-                        <TableCell>Chain</TableCell>
-                        <TableCell>Category</TableCell>
-                        <TableCell>Store Class</TableCell>
-                        <TableCell>Branch Code</TableCell>
-                        <TableCell>Branch Name</TableCell>
-                        <TableCell align="center">Action</TableCell>
+                        <TableCell><strong>Chain</strong></TableCell>
+                        <TableCell><strong>Category</strong></TableCell>
+                        <TableCell><strong>Store Class</strong></TableCell>
+                        <TableCell><strong>Branch Code</strong></TableCell>
+                        <TableCell><strong>Branch Name</strong></TableCell>
+                        <TableCell align="center"><strong>Action</strong></TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {addedBranches.map((branch) => (
-                        <TableRow key={branch.id}>
-                          <TableCell>{branch.chain}</TableCell>
-                          <TableCell>{branch.category}</TableCell>
-                          <TableCell>{branch.storeClass}</TableCell>
-                          <TableCell>{branch.branchCode}</TableCell>
-                          <TableCell>{branch.branchName}</TableCell>
-                          <TableCell align="center">
-                            <IconButton
-                              size="small"
-                              color="error"
-                              onClick={() => handleDeleteAddedBranch(branch.id)}
-                            >
-                              <DeleteForeverIcon fontSize="small" />
-                            </IconButton>
-                          </TableCell>
-                        </TableRow>
-                      ))}
+                      {addedBranches
+                        .slice(addedBranchesPage * addedBranchesRowsPerPage, addedBranchesPage * addedBranchesRowsPerPage + addedBranchesRowsPerPage)
+                        .map((branch) => (
+                          <TableRow key={branch.id}>
+                            <TableCell>{branch.chainName || branch.chain}</TableCell>
+                            <TableCell>{branch.categoryName || branch.category}</TableCell>
+                            <TableCell>{branch.storeClassName || branch.storeClass}</TableCell>
+                            <TableCell>{branch.branchCode}</TableCell>
+                            <TableCell>{branch.branchName}</TableCell>
+                            <TableCell align="center">
+                              <IconButton
+                                size="small"
+                                color="error"
+                                onClick={() => handleDeleteAddedBranch(branch.id)}
+                              >
+                                <DeleteForeverIcon fontSize="small" />
+                              </IconButton>
+                            </TableCell>
+                          </TableRow>
+                        ))}
                     </TableBody>
                   </Table>
+                  <TablePagination
+                    rowsPerPageOptions={[5, 10, 25]}
+                    component="div"
+                    count={addedBranches.length}
+                    rowsPerPage={addedBranchesRowsPerPage}
+                    page={addedBranchesPage}
+                    onPageChange={(e, newPage) => setAddedBranchesPage(newPage)}
+                    onRowsPerPageChange={(e) => {
+                      setAddedBranchesRowsPerPage(+e.target.value);
+                      setAddedBranchesPage(0);
+                    }}
+                  />
                 </TableContainer>
               </Grid>
             )}
@@ -718,12 +872,48 @@ export default function StoreMaintenance() {
           <Button 
             variant="contained" 
             color="primary"
-            disabled={addedBranches.length === 0}
+            disabled={addedBranches.length === 0 || loading}
+            onClick={handleSaveAllBranches}
           >
-            Save All ({addedBranches.length})
+            {loading ? 'Saving...' : `Save All (${addedBranches.length})`}
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Close Add Modal Confirmation Dialog */}
+      <Dialog open={openCloseConfirmDialog} onClose={handleCancelCloseAddModal}>
+        <DialogTitle>Confirm Close</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            You have unsaved data. All inputs and added branches will be cleared. Do you want to continue?
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCancelCloseAddModal} color="inherit">
+            No
+          </Button>
+          <Button onClick={handleConfirmCloseAddModal} color="primary" variant="contained">
+            Yes
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Snackbar for feedback (consistent with ItemMaintenance) */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={3000}
+        onClose={handleCloseSnackbar}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+      >
+        <Alert 
+          onClose={handleCloseSnackbar} 
+          severity={snackbar.severity}
+          variant="filled"
+          sx={{ width: '100%' }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }
