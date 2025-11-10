@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 // MUI Core Components
 import { Box, Drawer, AppBar, Toolbar, List, Typography, IconButton, ListItem, ListItemButton, ListItemIcon, ListItemText, Card, CardContent, Grid, Button,
   useTheme, useMediaQuery, Chip, Paper, TextField, Select, FormControl, InputLabel, CircularProgress, Alert, Snackbar, Table, TableBody,
@@ -11,7 +13,7 @@ import {
   Dashboard as DashboardIcon, Add as AddIcon, ViewList as ViewListIcon, CheckCircle as ReceiveIcon, Inventory2Outlined, StoreMallDirectoryOutlined,
   Assignment as AssignIcon, Assessment as ReportsIcon, Menu as MenuIcon, Inventory2, Build, AttachMoney, ExpandLessOutlined, 
   Description, TrendingUp, Warning, CheckCircleOutline, Star, AutoAwesome, TuneOutlined, AssignmentTurnedIn as Assignment, Delete,
-  Visibility as VisibilityIcon, Edit as EditIcon, Save as SaveIcon, Cancel as CancelIcon, DeleteForever as DeleteForeverIcon, DescriptionOutlined, History as HistoryIcon } from '@mui/icons-material';
+  Visibility as VisibilityIcon, Edit as EditIcon, Save as SaveIcon, Cancel as CancelIcon, DeleteForever as DeleteForeverIcon, DescriptionOutlined, History as HistoryIcon, Logout as LogoutIcon } from '@mui/icons-material';
 
 import { styled, createTheme, ThemeProvider } from '@mui/material/styles';
 import MuiAlert from '@mui/material/Alert';
@@ -114,6 +116,8 @@ const UltraModernCard = styled(Card)(({ theme }) => ({
 // Dashboard Component
 const Dashboard = () => {
   const theme = useTheme();
+  const navigate = useNavigate();
+  const { user, logout } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [currentView, setCurrentView] = useState('exclusivityform');
   const [openDetailsDialog, setOpenDetailsDialog] = useState(null);
@@ -442,6 +446,35 @@ const Dashboard = () => {
                  currentView === 'storemaintenance' ? 'Store Maintenance' :
                  currentView === 'auditlogs' ? 'Audit Logs' : 'Exclusivity Form'}
               </Typography>
+              
+              {/* User Info and Logout */}
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                <Box sx={{ display: { xs: 'none', sm: 'block' } }}>
+                  <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                    {user?.username || 'User'}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {user?.role || 'Employee'}
+                  </Typography>
+                </Box>
+                <Tooltip title="Logout">
+                  <IconButton
+                    color="inherit"
+                    onClick={() => {
+                      logout();
+                      navigate('/login');
+                    }}
+                    sx={{
+                      '&:hover': {
+                        background: '#fee2e2',
+                        color: '#dc2626'
+                      }
+                    }}
+                  >
+                    <LogoutIcon />
+                  </IconButton>
+                </Tooltip>
+              </Box>
             </Toolbar>
           </ModernAppBar>
   

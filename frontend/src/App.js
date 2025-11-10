@@ -1,7 +1,11 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
+import { AuthProvider } from './context/AuthContext';
+import ProtectedRoute from './components/ProtectedRoute';
+import Login from './components/Login';
+import SignUp from './components/SignUp';
 import Dashboard from './components/Dashboard';
 import AddItem from './components/AddItem';
 import ViewItems from './components/ViewItems';
@@ -34,20 +38,76 @@ function App() {
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <Router>
-        <div className="App">
-          <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/add-item" element={<AddItem />} />
-            <Route path="/view-items" element={<ViewItems />} />
-            <Route path="/check-out" element={<CheckOutItem />} />
-            <Route path="/check-in" element={<CheckInItem />} />
-            <Route path="/reports" element={<Reports />} />
-            <Route path="/audit-logs" element={<AuditLogs />} />
-          </Routes>
-        </div>
-      </Router>
+      <AuthProvider>
+        <Router>
+          <div className="App">
+            <Routes>
+              {/* Public Routes */}
+              <Route path="/login" element={<Login />} />
+              <Route path="/signup" element={<SignUp />} />
+              
+              {/* Protected Routes */}
+              <Route path="/" element={<Navigate to="/dashboard" replace />} />
+              <Route 
+                path="/dashboard" 
+                element={
+                  <ProtectedRoute>
+                    <Dashboard />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/add-item" 
+                element={
+                  <ProtectedRoute>
+                    <AddItem />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/view-items" 
+                element={
+                  <ProtectedRoute>
+                    <ViewItems />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/check-out" 
+                element={
+                  <ProtectedRoute>
+                    <CheckOutItem />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/check-in" 
+                element={
+                  <ProtectedRoute>
+                    <CheckInItem />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/reports" 
+                element={
+                  <ProtectedRoute>
+                    <Reports />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/audit-logs" 
+                element={
+                  <ProtectedRoute>
+                    <AuditLogs />
+                  </ProtectedRoute>
+                } 
+              />
+            </Routes>
+          </div>
+        </Router>
+      </AuthProvider>
     </ThemeProvider>
   );
 }
