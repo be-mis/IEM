@@ -3,6 +3,14 @@ const express = require('express');
 const router = express.Router();
 const { getPool } = require('../config/database');
 const { logAudit, getIp } = require('../utils/auditLogger');
+const multer = require('multer');
+const XLSX = require('xlsx');
+
+// Configure multer for file uploads
+const upload = multer({ 
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit
+});
 
 // GET /api/inventory/items - Get all items with filtering (FIXED)
 router.get('/items', async (req, res) => {
@@ -550,6 +558,288 @@ router.post('/remove-exclusivity-item', async (req, res) => {
   }
 });
 
+// POST /api/inventory/mass-upload-exclusivity-items - Mass upload items from Excel/CSV
+router.post('/mass-upload-exclusivity-items', upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    const pool = getPool();
+    let data;
+
+    try {
+      // Parse the uploaded file
+      const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
+      const sheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[sheetName];
+      data = XLSX.utils.sheet_to_json(worksheet);
+    } catch (parseError) {
+      console.error('Error parsing file:', parseError);
+      return res.status(400).json({ 
+        error: 'Failed to parse file. Please ensure it is a valid Excel or CSV file.',
+        message: parseError.message 
+      });
+    }
+
+    if (!data || data.length === 0) {
+      return res.status(400).json({ error: 'File is empty or has no valid data' });
+    }
+
+    const results = {
+      success: [],
+      failed: [],
+      skipped: []
+    };
+
+    // Fetch lookup data for converting names to codes
+    const [chainsData] = await pool.execute('SELECT chainCode, chainName FROM epc_chains');
+    const [categoriesData] = await pool.execute('SELECT catCode, category FROM epc_categories');
+    const [storeClassesData] = await pool.execute('SELECT storeClassCode, storeClassification FROM epc_store_class');
+
+    // Create lookup maps (case-insensitive)
+    const chainMap = new Map();
+    chainsData.forEach(c => {
+      chainMap.set(c.chainName.toLowerCase(), c.chainCode);
+      chainMap.set(c.chainCode.toLowerCase(), c.chainCode); // Also support code input
+    });
+
+    const categoryMap = new Map();
+    categoriesData.forEach(c => {
+      categoryMap.set(c.category.toLowerCase(), c.category.toLowerCase());
+      // Also allow exact code match
+      const lowerCategory = c.category.toLowerCase();
+      categoryMap.set(lowerCategory, lowerCategory);
+    });
+
+    const storeClassMap = new Map();
+    storeClassesData.forEach(sc => {
+      storeClassMap.set(sc.storeClassification.toLowerCase(), sc.storeClassCode);
+      storeClassMap.set(sc.storeClassCode.toLowerCase(), sc.storeClassCode); // Also support code input
+    });
+
+    for (let i = 0; i < data.length; i++) {
+      const row = data[i];
+      const rowNumber = i + 2; // +2 because row 1 is headers and arrays are 0-indexed
+
+      try {
+        // Extract and normalize field names (case-insensitive)
+        const chainInput = row.Chain || row.chain || row.CHAIN;
+        const categoryInput = row.Category || row.category || row.CATEGORY;
+        const storeClassInput = row.StoreClass || row.storeClass || row.STORECLASS || row['Store Class'];
+        const itemCode = row.ItemCode || row.itemCode || row.ITEMCODE || row['Item Code'];
+
+        // Validate required fields are not empty or just whitespace
+        if (!chainInput || !categoryInput || !storeClassInput || !itemCode) {
+          results.failed.push({
+            row: rowNumber,
+            itemCode: itemCode || 'N/A',
+            reason: 'Missing required fields (Chain, Category, StoreClass, or ItemCode)'
+          });
+          continue;
+        }
+
+        // Trim whitespace and validate they're not empty after trimming
+        const chainTrimmed = String(chainInput).trim();
+        const categoryTrimmed = String(categoryInput).trim();
+        const storeClassTrimmed = String(storeClassInput).trim();
+        const itemCodeTrimmed = String(itemCode).trim();
+
+        if (!chainTrimmed || !categoryTrimmed || !storeClassTrimmed || !itemCodeTrimmed) {
+          results.failed.push({
+            row: rowNumber,
+            itemCode: itemCodeTrimmed || 'N/A',
+            reason: 'One or more fields contain only whitespace'
+          });
+          continue;
+        }
+
+        // Validate ItemCode format (alphanumeric, no special chars except dash and underscore)
+        if (!/^[A-Z0-9_-]+$/i.test(itemCodeTrimmed)) {
+          results.failed.push({
+            row: rowNumber,
+            itemCode: itemCodeTrimmed,
+            reason: 'Invalid ItemCode format. Only letters, numbers, dash, and underscore are allowed.'
+          });
+          continue;
+        }
+
+        // Convert names to codes (case-insensitive lookup)
+        const chain = chainMap.get(chainTrimmed.toLowerCase());
+        const category = categoryMap.get(categoryTrimmed.toLowerCase());
+        const storeClass = storeClassMap.get(storeClassTrimmed.toLowerCase());
+
+        // Validate conversions
+        if (!chain) {
+          results.failed.push({
+            row: rowNumber,
+            itemCode: itemCodeTrimmed,
+            reason: `Invalid Chain: "${chainTrimmed}". Please use valid chain name or code.`
+          });
+          continue;
+        }
+
+        if (!category) {
+          results.failed.push({
+            row: rowNumber,
+            itemCode: itemCodeTrimmed,
+            reason: `Invalid Category: "${categoryTrimmed}". Please use valid category name.`
+          });
+          continue;
+        }
+
+        if (!storeClass) {
+          results.failed.push({
+            row: rowNumber,
+            itemCode: itemCodeTrimmed,
+            reason: `Invalid Store Class: "${storeClassTrimmed}". Please use valid store classification or code.`
+          });
+          continue;
+        }
+
+        // Check if ItemCode exists in epc_item_list table
+        try {
+          const [itemExists] = await pool.execute(`
+            SELECT itemCode 
+            FROM epc_item_list 
+            WHERE itemCode = ?
+          `, [itemCodeTrimmed]);
+          
+          if (itemExists.length === 0) {
+            results.failed.push({
+              row: rowNumber,
+              itemCode: itemCodeTrimmed,
+              reason: `ItemCode "${itemCodeTrimmed}" does not exist in epc_item_list table. Please verify the item code.`
+            });
+            continue;
+          }
+        } catch (itemCheckError) {
+          console.error(`Error checking ItemCode ${itemCodeTrimmed}:`, itemCheckError);
+          results.failed.push({
+            row: rowNumber,
+            itemCode: itemCodeTrimmed,
+            reason: `Database error while validating ItemCode: ${itemCheckError.message}`
+          });
+          continue;
+        }
+
+        // Validate column name exists in database (dynamic validation)
+        const columnName = `${chain}${storeClass}`;
+        
+        // Check if column exists in the database table
+        try {
+          const [columns] = await pool.execute(`
+            SELECT COLUMN_NAME 
+            FROM INFORMATION_SCHEMA.COLUMNS 
+            WHERE TABLE_SCHEMA = DATABASE() 
+              AND TABLE_NAME = 'epc_item_exclusivity_list'
+              AND COLUMN_NAME = ?
+          `, [columnName]);
+          
+          if (columns.length === 0) {
+            results.failed.push({
+              row: rowNumber,
+              itemCode: itemCodeTrimmed,
+              reason: `Invalid combination: Column "${columnName}" does not exist in database. Chain "${chainTrimmed}" and StoreClass "${storeClassTrimmed}" cannot be combined.`
+            });
+            continue;
+          }
+        } catch (colCheckError) {
+          console.error(`Error checking column ${columnName}:`, colCheckError);
+          results.failed.push({
+            row: rowNumber,
+            itemCode: itemCodeTrimmed,
+            reason: `Database error while validating combination: ${colCheckError.message}`
+          });
+          continue;
+        }
+
+        // Upsert the item
+        const upsertQuery = `
+          INSERT INTO epc_item_exclusivity_list (itemCode, ${columnName}) 
+          VALUES (?, 1)
+          ON DUPLICATE KEY UPDATE ${columnName} = 1, updated_at = CURRENT_TIMESTAMP
+        `;
+        
+        const [result] = await pool.execute(upsertQuery, [itemCodeTrimmed]);
+        
+        const action = result.affectedRows === 1 ? 'inserted' : 'updated';
+        
+        results.success.push({
+          row: rowNumber,
+          itemCode: itemCodeTrimmed,
+          action,
+          column: columnName
+        });
+
+      } catch (error) {
+        console.error(`Error processing row ${rowNumber}:`, error);
+        results.failed.push({
+          row: rowNumber,
+          itemCode: row.ItemCode || row.itemCode || 'N/A',
+          reason: error.message
+        });
+      }
+    }
+
+    // Log comprehensive audit trail with full details
+    try {
+      await logAudit({
+        entityType: 'item_exclusivity',
+        entityId: null,
+        action: 'mass_upload',
+        entityName: `Mass upload: ${results.success.length} successful, ${results.failed.length} failed`,
+        userId: req.user?.id || null,
+        userName: req.user?.username || 'System',
+        ip: getIp(req),
+        details: {
+          fileName: req.file.originalname,
+          fileSize: req.file.size,
+          uploadTimestamp: new Date().toISOString(),
+          summary: {
+            totalRows: data.length,
+            successCount: results.success.length,
+            failedCount: results.failed.length,
+            skippedCount: results.skipped.length
+          },
+          successfulItems: results.success.map(item => ({
+            row: item.row,
+            itemCode: item.itemCode,
+            action: item.action,
+            column: item.column
+          })),
+          failedItems: results.failed.map(item => ({
+            row: item.row,
+            itemCode: item.itemCode,
+            reason: item.reason
+          }))
+        }
+      });
+    } catch (auditError) {
+      console.error('Error logging audit trail:', auditError);
+    }
+
+    const responseStatus = results.failed.length > 0 ? 207 : 200;
+    res.status(responseStatus).json({
+      message: 'File processed',
+      summary: {
+        total: data.length,
+        success: results.success.length,
+        failed: results.failed.length,
+        skipped: results.skipped.length
+      },
+      results
+    });
+
+  } catch (error) {
+    console.error('Error in mass upload:', error);
+    res.status(500).json({ 
+      error: 'Failed to process upload',
+      message: error.message 
+    });
+  }
+});
+
 // POST /api/inventory/add-exclusivity-branches - Add branches to exclusivity list
 router.post('/add-exclusivity-branches', async (req, res) => {
   try {
@@ -686,6 +976,272 @@ router.post('/add-exclusivity-branches', async (req, res) => {
     console.error('Error adding exclusivity branches:', error);
     res.status(500).json({ 
       error: 'Failed to add branches',
+      message: error.message 
+    });
+  }
+});
+
+// POST /api/inventory/mass-upload-exclusivity-branches - Mass upload new branches from Excel file
+router.post('/mass-upload-exclusivity-branches', upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    // Parse the uploaded file from buffer (memoryStorage)
+    const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
+    const sheetName = workbook.SheetNames[0];
+    const worksheet = workbook.Sheets[sheetName];
+    const data = XLSX.utils.sheet_to_json(worksheet);
+
+    if (data.length === 0) {
+      return res.status(400).json({ error: 'The uploaded file is empty' });
+    }
+
+    // Get database pool
+    const pool = getPool();
+
+    // Validation results
+    const results = {
+      success: [],
+      failed: []
+    };
+
+    // Get all chains and store classes for validation and conversion
+    const [chains] = await pool.query('SELECT chainCode, chainName FROM epc_chains');
+    const [storeClasses] = await pool.query('SELECT storeClassCode, storeClassification FROM epc_store_class');
+
+    // Create lookup maps
+    const chainMap = new Map();
+    chains.forEach(chain => {
+      chainMap.set(chain.chainName.toLowerCase().trim(), chain.chainCode);
+    });
+
+    // Map store codes - accept both code and full name
+    const storeClassMap = new Map();
+    storeClasses.forEach(storeClass => {
+      // Map by code (e.g., "ASEH" -> "ASEH")
+      storeClassMap.set(storeClass.storeClassCode.toLowerCase().trim(), storeClass.storeClassCode);
+      // Also map by full name for backward compatibility
+      storeClassMap.set(storeClass.storeClassification.toLowerCase().trim(), storeClass.storeClassCode);
+    });
+
+    // Process each row
+    for (let i = 0; i < data.length; i++) {
+      const row = data[i];
+      const rowNum = i + 2; // Excel row number (accounting for header)
+
+      // Validate required fields
+      const errors = [];
+      
+      if (!row['Store Code'] || row['Store Code'].toString().trim() === '') {
+        errors.push('Store Code is required');
+      }
+      
+      if (!row.Chain || row.Chain.toString().trim() === '') {
+        errors.push('Chain is required');
+      }
+
+      if (errors.length > 0) {
+        results.failed.push({
+          row: rowNum,
+          branchCode: row['Store Code'] || 'N/A',
+          data: row,
+          errors: errors,
+          reason: errors.join('; ')
+        });
+        continue;
+      }
+
+      // Trim and prepare values
+      const branchCode = row['Store Code'].toString().trim();
+      const branchName = row['Store Description'] ? row['Store Description'].toString().trim() : '';
+      const chainName = row.Chain.toString().trim();
+      
+      // Optional category class fields - now accepting store codes directly
+      const lampsClass = row.LampsClass ? row.LampsClass.toString().trim() : '';
+      const decorsClass = row.DecorsClass ? row.DecorsClass.toString().trim() : '';
+      const clocksClass = row.ClocksClass ? row.ClocksClass.toString().trim() : '';
+      const stationeryClass = row.StationeryClass ? row.StationeryClass.toString().trim() : '';
+      const framesClass = row.FramesClass ? row.FramesClass.toString().trim() : '';
+
+      // Convert chain name to code
+      const chainCode = chainMap.get(chainName.toLowerCase());
+
+      // Validate chain
+      if (!chainCode) {
+        errors.push(`Invalid Chain: "${chainName}"`);
+      }
+
+      // Validate store codes (if provided) - they should be codes, not full names
+      let lampsClassCode = null;
+      let decorsClassCode = null;
+      let clocksClassCode = null;
+      let stationeryClassCode = null;
+      let framesClassCode = null;
+
+      if (lampsClass) {
+        // Check if it's a valid store code
+        lampsClassCode = storeClassMap.get(lampsClass.toLowerCase());
+        if (!lampsClassCode) {
+          errors.push(`Invalid LampsClass code: "${lampsClass}"`);
+        }
+      }
+
+      if (decorsClass) {
+        decorsClassCode = storeClassMap.get(decorsClass.toLowerCase());
+        if (!decorsClassCode) {
+          errors.push(`Invalid DecorsClass code: "${decorsClass}"`);
+        }
+      }
+
+      if (clocksClass) {
+        clocksClassCode = storeClassMap.get(clocksClass.toLowerCase());
+        if (!clocksClassCode) {
+          errors.push(`Invalid ClocksClass code: "${clocksClass}"`);
+        }
+      }
+
+      if (stationeryClass) {
+        stationeryClassCode = storeClassMap.get(stationeryClass.toLowerCase());
+        if (!stationeryClassCode) {
+          errors.push(`Invalid StationeryClass code: "${stationeryClass}"`);
+        }
+      }
+
+      if (framesClass) {
+        framesClassCode = storeClassMap.get(framesClass.toLowerCase());
+        if (!framesClassCode) {
+          errors.push(`Invalid FramesClass code: "${framesClass}"`);
+        }
+      }
+
+      if (errors.length > 0) {
+        results.failed.push({
+          row: rowNum,
+          branchCode: branchCode || 'N/A',
+          data: row,
+          errors: errors,
+          reason: errors.join('; ')
+        });
+        continue;
+      }
+
+      // Check if the branch exists in the database using branchCode
+      const [branchCheck] = await pool.query(
+        'SELECT branchCode, branchName FROM epc_branches WHERE branchCode = ?',
+        [branchCode]
+      );
+
+      const storeExists = branchCheck.length > 0;
+      const actualBranchName = storeExists ? branchCheck[0].branchName : branchName;
+
+      // Insert or Update the branch with chain and category classifications
+      try {
+        if (storeExists) {
+          // Update existing store
+          await pool.query(
+            `UPDATE epc_branches 
+             SET chainCode = ?, lampsClass = ?, decorsClass = ?, clocksClass = ?, stationeryClass = ?, framesClass = ?
+             WHERE branchCode = ?`,
+            [chainCode, lampsClassCode, decorsClassCode, clocksClassCode, stationeryClassCode, framesClassCode, branchCode]
+          );
+        } else {
+          // Insert new store
+          await pool.query(
+            `INSERT INTO epc_branches (branchCode, branchName, chainCode, lampsClass, decorsClass, clocksClass, stationeryClass, framesClass)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            [branchCode, actualBranchName, chainCode, lampsClassCode, decorsClassCode, clocksClassCode, stationeryClassCode, framesClassCode]
+          );
+        }
+
+        results.success.push({
+          row: rowNum,
+          branchCode: branchCode,
+          branchName: actualBranchName,
+          chain: chainName,
+          lampsClass: lampsClass || 'N/A',
+          decorsClass: decorsClass || 'N/A',
+          clocksClass: clocksClass || 'N/A',
+          stationeryClass: stationeryClass || 'N/A',
+          framesClass: framesClass || 'N/A',
+          action: storeExists ? 'Updated' : 'Created'
+        });
+      } catch (error) {
+        results.failed.push({
+          row: rowNum,
+          branchCode: branchCode || branchName || 'N/A',
+          data: row,
+          errors: [`Database error: ${error.message}`],
+          reason: `Database error: ${error.message}`
+        });
+      }
+    }
+
+    // Log the mass upload action
+    const uploadTimestamp = new Date().toISOString();
+    
+    // Count created vs updated stores
+    const createdCount = results.success.filter(item => item.action === 'Created').length;
+    const updatedCount = results.success.filter(item => item.action === 'Updated').length;
+    
+    const auditDetails = {
+      filename: req.file.originalname,
+      fileSize: req.file.size,
+      timestamp: uploadTimestamp,
+      totalRows: data.length,
+      successCount: results.success.length,
+      createdCount: createdCount,
+      updatedCount: updatedCount,
+      failedCount: results.failed.length,
+      successfulBranches: results.success.map(item => ({
+        branchCode: item.branchCode,
+        branchName: item.branchName,
+        chain: item.chain,
+        action: item.action,
+        lampsClass: item.lampsClass,
+        decorsClass: item.decorsClass,
+        clocksClass: item.clocksClass,
+        stationeryClass: item.stationeryClass,
+        framesClass: item.framesClass
+      })),
+      failedBranches: results.failed.map(item => ({
+        row: item.row,
+        storeDescription: item.data['Store Description'],
+        chain: item.data.Chain,
+        errors: item.errors
+      }))
+    };
+
+    await logAudit({
+      entityType: 'branch_exclusivity',
+      entityId: null,
+      action: 'mass_upload',
+      entityName: `Mass upload: ${createdCount} created, ${updatedCount} updated, ${results.failed.length} failed`,
+      userId: req.user?.id || null,
+      userName: req.user?.username || 'System',
+      ip: getIp(req),
+      details: auditDetails
+    });
+
+    // Send response
+    res.json({
+      message: `Mass upload completed: ${results.success.length} successful (${createdCount} created, ${updatedCount} updated), ${results.failed.length} failed`,
+      summary: {
+        total: data.length,
+        success: results.success.length,
+        created: createdCount,
+        updated: updatedCount,
+        failed: results.failed.length
+      },
+      results
+    });
+
+  } catch (error) {
+    console.error('Error during mass upload:', error);
+    
+    res.status(500).json({ 
+      error: 'Failed to process mass upload',
       message: error.message 
     });
   }

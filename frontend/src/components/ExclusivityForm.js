@@ -127,7 +127,7 @@ export default function ExclusivityForm() {
           size="large"
           startIcon={<FileDownloadIcon />}
           onClick={handleExport}
-          disabled={branchesLoading || itemsLoading}
+          disabled={branchesLoading || itemsLoading || !filters.transaction}
         >
           Export to Excel
         </Button>

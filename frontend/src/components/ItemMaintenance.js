@@ -7,10 +7,12 @@ import {
 } from '@mui/material';
 import {
   TuneOutlined, Search as SearchIcon, Clear as ClearIcon,
-  DeleteForever as DeleteForeverIcon, Add as AddIcon
+  DeleteForever as DeleteForeverIcon, Add as AddIcon, CloudUpload as CloudUploadIcon,
+  FileDownload as FileDownloadIcon
 } from '@mui/icons-material';
 import Filter from '../components/Filter';
 import axios from 'axios';
+import * as XLSX from 'xlsx';
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE || 'http://localhost:5000/api';
 
@@ -77,6 +79,13 @@ export default function ItemMaintenance() {
   const [chains, setChains] = useState([]);
   const [categories, setCategories] = useState([]);
   const [storeClasses, setStoreClasses] = useState([]);
+
+  // Mass Upload Modal states
+  const [openMassUploadModal, setOpenMassUploadModal] = useState(false);
+  const [uploadFile, setUploadFile] = useState(null);
+  const [uploadLoading, setUploadLoading] = useState(false);
+  const [uploadResults, setUploadResults] = useState(null);
+  const [isDragging, setIsDragging] = useState(false);
 
   // Fetch items from API
   const fetchItems = async () => {
@@ -232,6 +241,268 @@ export default function ItemMaintenance() {
   const blurActiveElement = () => {
     if (typeof document !== 'undefined' && document.activeElement && typeof document.activeElement.blur === 'function') {
       document.activeElement.blur();
+    }
+  };
+
+  // Mass Upload Handlers
+  const handleOpenMassUploadModal = () => {
+    blurActiveElement();
+    setOpenMassUploadModal(true);
+    setUploadFile(null);
+    setUploadResults(null);
+  };
+
+  const handleCloseMassUploadModal = () => {
+    setOpenMassUploadModal(false);
+    setUploadFile(null);
+    setUploadResults(null);
+  };
+
+  const handleFileChange = (event) => {
+    const file = event.target.files[0];
+    if (file) {
+      validateAndSetFile(file);
+      event.target.value = null; // Reset file input
+    }
+  };
+
+  const validateAndSetFile = (file) => {
+    // Validate file size (10MB limit)
+    const maxSize = 10 * 1024 * 1024; // 10MB in bytes
+    if (file.size > maxSize) {
+      setSnackbar({
+        open: true,
+        message: 'File size exceeds 10MB limit. Please upload a smaller file.',
+        severity: 'error'
+      });
+      return;
+    }
+
+    // Validate file type
+    const validTypes = [
+      'application/vnd.ms-excel', 
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'text/csv'
+    ];
+    
+    if (!validTypes.includes(file.type) && !file.name.match(/\.(xlsx|xls|csv)$/i)) {
+      setSnackbar({
+        open: true,
+        message: 'Please upload a valid Excel or CSV file',
+        severity: 'error'
+      });
+      return;
+    }
+    
+    setUploadFile(file);
+    setUploadResults(null);
+  };
+
+  const handleDragOver = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setIsDragging(false);
+
+    const files = event.dataTransfer.files;
+    if (files && files.length > 0) {
+      validateAndSetFile(files[0]);
+    }
+  };
+
+  const handleMassUpload = async () => {
+    if (!uploadFile) {
+      setSnackbar({
+        open: true,
+        message: 'Please select a file to upload',
+        severity: 'warning'
+      });
+      return;
+    }
+
+    try {
+      setUploadLoading(true);
+      
+      const formData = new FormData();
+      formData.append('file', uploadFile);
+
+      const response = await axios.post(`${API_BASE_URL}/inventory/mass-upload-exclusivity-items`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+
+      setUploadResults(response.data);
+      
+      if (response.data.summary.success > 0) {
+        setSnackbar({
+          open: true,
+          message: `Successfully uploaded ${response.data.summary.success} item(s)!${response.data.summary.failed > 0 ? ` ${response.data.summary.failed} failed.` : ''}`,
+          severity: response.data.summary.failed > 0 ? 'warning' : 'success'
+        });
+        
+        // Refresh the items list
+        await fetchItems();
+      } else {
+        setSnackbar({
+          open: true,
+          message: 'Upload completed but no items were added',
+          severity: 'warning'
+        });
+      }
+    } catch (error) {
+      console.error('Error uploading file:', error);
+      setSnackbar({
+        open: true,
+        message: error.response?.data?.error || 'Failed to upload file',
+        severity: 'error'
+      });
+    } finally {
+      setUploadLoading(false);
+    }
+  };
+
+  const handleDownloadTemplate = () => {
+    // Create a sample Excel template with actual data from dropdowns
+    const headers = ['Chain', 'Category', 'StoreClass', 'ItemCode'];
+    const sampleData = [];
+    
+    // Add sample rows using actual names from the dropdown data
+    if (chains.length > 0 && categories.length > 0 && storeClasses.length > 0) {
+      sampleData.push({
+        'Chain': chains[0]?.chainName || 'Chain Name',
+        'Category': categories[0]?.category || 'Category Name',
+        'StoreClass': storeClasses[0]?.storeClassification || 'Store Classification',
+        'ItemCode': 'ITEM001'
+      });
+      
+      if (chains.length > 1 && categories.length > 1 && storeClasses.length > 1) {
+        sampleData.push({
+          'Chain': chains[1]?.chainName || 'Chain Name',
+          'Category': categories[1]?.category || 'Category Name',
+          'StoreClass': storeClasses[1]?.storeClassification || 'Store Classification',
+          'ItemCode': 'ITEM002'
+        });
+      }
+    } else {
+      // Fallback if data not loaded
+      sampleData.push({
+        'Chain': 'Chain Name',
+        'Category': 'Category Name',
+        'StoreClass': 'Store Classification',
+        'ItemCode': 'ITEM001'
+      });
+      sampleData.push({
+        'Chain': 'Chain Name',
+        'Category': 'Category Name',
+        'StoreClass': 'Store Classification',
+        'ItemCode': 'ITEM002'
+      });
+    }
+    
+    // Create Excel workbook using XLSX library for proper encoding
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(sampleData);
+
+    // Set column widths for better readability
+    ws['!cols'] = [
+      { wch: 25 }, // Chain
+      { wch: 20 }, // Category
+      { wch: 30 }, // StoreClass
+      { wch: 15 }  // ItemCode
+    ];
+
+    // Force all cells to be text format to prevent Excel auto-formatting
+    const range = XLSX.utils.decode_range(ws['!ref']);
+    for (let R = range.s.r; R <= range.e.r; ++R) {
+      for (let C = range.s.c; C <= range.e.c; ++C) {
+        const cellAddress = XLSX.utils.encode_cell({ r: R, c: C });
+        if (!ws[cellAddress]) continue;
+        
+        // Set cell type to string and add text format
+        ws[cellAddress].t = 's'; // 's' = string type
+        if (!ws[cellAddress].z) ws[cellAddress].z = '@'; // '@' = text format
+      }
+    }
+
+    // Add worksheet to workbook
+    XLSX.utils.book_append_sheet(wb, ws, 'Template');
+
+    // Generate filename
+    const filename = 'mass_upload_template.xlsx';
+
+    // Export file as Excel with text formatting
+    XLSX.writeFile(wb, filename, { cellStyles: true });
+  };
+
+  const handleExportFailedItems = () => {
+    if (!uploadResults || !uploadResults.results.failed || uploadResults.results.failed.length === 0) {
+      setSnackbar({
+        open: true,
+        message: 'No failed items to export',
+        severity: 'info'
+      });
+      return;
+    }
+
+    try {
+      // Prepare data for Excel export
+      const failedData = uploadResults.results.failed.map(item => ({
+        'Row': item.row || 'N/A',
+        'Chain': '', // User needs to fill this
+        'Category': '', // User needs to fill this
+        'StoreClass': '', // User needs to fill this
+        'ItemCode': item.itemCode || '',
+        'Error Reason': item.reason || ''
+      }));
+
+      // Create workbook and worksheet
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.json_to_sheet(failedData);
+
+      // Set column widths
+      ws['!cols'] = [
+        { wch: 8 },  // Row
+        { wch: 25 }, // Chain
+        { wch: 20 }, // Category
+        { wch: 30 }, // StoreClass
+        { wch: 20 }, // ItemCode
+        { wch: 50 }  // Error Reason
+      ];
+
+      // Add worksheet to workbook
+      XLSX.utils.book_append_sheet(wb, ws, 'Failed Items');
+
+      // Generate filename with timestamp
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+      const filename = `failed_items_${timestamp}.xlsx`;
+
+      // Export file
+      XLSX.writeFile(wb, filename);
+
+      setSnackbar({
+        open: true,
+        message: `Exported ${failedData.length} failed item(s) to ${filename}`,
+        severity: 'success'
+      });
+    } catch (error) {
+      console.error('Error exporting failed items:', error);
+      setSnackbar({
+        open: true,
+        message: 'Failed to export file',
+        severity: 'error'
+      });
     }
   };
 
@@ -696,6 +967,16 @@ export default function ItemMaintenance() {
 
             <Button
               variant="contained"
+              color="secondary"
+              startIcon={<CloudUploadIcon />}
+              onClick={handleOpenMassUploadModal}
+              sx={{ mr: 2 }}
+            >
+              Mass Upload
+            </Button>
+
+            <Button
+              variant="contained"
               color="error"
               startIcon={<DeleteForeverIcon />}
               onClick={handleOpenBulkDialog}
@@ -1053,6 +1334,238 @@ export default function ItemMaintenance() {
           </Button>
           <Button onClick={handleConfirmCloseAddModal} color="primary" variant="contained">
             Yes
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Mass Upload Modal */}
+      <Dialog 
+        open={openMassUploadModal} 
+        onClose={() => {}}
+        disableEscapeKeyDown
+        maxWidth="lg" 
+        fullWidth
+      >
+        <DialogTitle>Mass Upload Items</DialogTitle>
+        <DialogContent>
+          <Box sx={{ pt: 2 }}>
+            <Alert severity="info" sx={{ mb: 3 }}>
+              <Typography variant="body2">
+                Upload an Excel or CSV file.
+                <br />
+                <strong>Required columns:</strong> Chain, Category, StoreClass, and ItemCode.
+                <br />
+                <strong>Note:</strong> Use the full names (not codes) for Chain, Category, and StoreClass.
+              </Typography>
+            </Alert>
+
+            {/* Code Reference Legend */}
+            <Box sx={{ mb: 3, p: 2, backgroundColor: '#f5f5f5', borderRadius: 1 }}>
+              <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 'bold', color: '#1976d2' }}>
+                Valid Values Reference (Use Names in Excel)
+              </Typography>
+              <Grid container spacing={2}>
+                {/* Chain Names */}
+                <Grid item xs={12} md={4}>
+                  <Paper sx={{ p: 2, height: '100%' }}>
+                    <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold', color: '#2e7d32' }}>
+                      Chain Names
+                    </Typography>
+                    <Box sx={{ maxHeight: 150, overflow: 'auto' }}>
+                      {chains.map((chain) => (
+                        <Typography key={chain.chainCode} variant="body2" sx={{ py: 0.5 }}>
+                          • <strong>{chain.chainName}</strong>
+                        </Typography>
+                      ))}
+                      {chains.length === 0 && (
+                        <Typography variant="body2" color="text.secondary">
+                          Loading...
+                        </Typography>
+                      )}
+                    </Box>
+                  </Paper>
+                </Grid>
+
+                {/* Category Names */}
+                <Grid item xs={12} md={4}>
+                  <Paper sx={{ p: 2, height: '100%' }}>
+                    <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold', color: '#ed6c02' }}>
+                      Category Names
+                    </Typography>
+                    <Box sx={{ maxHeight: 150, overflow: 'auto' }}>
+                      {categories.map((cat) => (
+                        <Typography key={cat.catCode} variant="body2" sx={{ py: 0.5 }}>
+                          • <strong>{cat.category}</strong>
+                        </Typography>
+                      ))}
+                      {categories.length === 0 && (
+                        <Typography variant="body2" color="text.secondary">
+                          Loading...
+                        </Typography>
+                      )}
+                    </Box>
+                  </Paper>
+                </Grid>
+
+                {/* Store Classification Names */}
+                <Grid item xs={12} md={4}>
+                  <Paper sx={{ p: 2, height: '100%' }}>
+                    <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold', color: '#9c27b0' }}>
+                      Store Classifications
+                    </Typography>
+                    <Box sx={{ maxHeight: 150, overflow: 'auto' }}>
+                      {storeClasses.map((sc) => (
+                        <Typography key={sc.storeClassCode} variant="body2" sx={{ py: 0.5 }}>
+                          • <strong>{sc.storeClassification}</strong>
+                        </Typography>
+                      ))}
+                      {storeClasses.length === 0 && (
+                        <Typography variant="body2" color="text.secondary">
+                          Loading...
+                        </Typography>
+                      )}
+                    </Box>
+                  </Paper>
+                </Grid>
+              </Grid>
+              <Alert severity="warning" sx={{ mt: 2 }}>
+                <Typography variant="body2">
+                  <strong>Important:</strong> Use the full names (not codes) in your Excel file.
+                  <br />
+                  <strong>Example:</strong> Chain: <code>{chains[0]?.chainName || 'Chain Name'}</code>, 
+                  Category: <code>{categories[0]?.category || 'Category'}</code>, 
+                  StoreClass: <code>{storeClasses[0]?.storeClassification || 'Store Classification'}</code>
+                </Typography>
+              </Alert>
+            </Box>
+
+            <Stack spacing={2}>
+              <Button
+                variant="outlined"
+                color="primary"
+                onClick={handleDownloadTemplate}
+                sx={{ alignSelf: 'flex-start' }}
+              >
+                Download Template
+              </Button>
+
+              <Box 
+                sx={{ 
+                  border: isDragging ? '2px solid #1976d2' : '2px dashed #ccc', 
+                  borderRadius: 2, 
+                  p: 3, 
+                  textAlign: 'center', 
+                  backgroundColor: isDragging ? '#e3f2fd' : '#f9f9f9',
+                  transition: 'all 0.3s ease',
+                  cursor: 'pointer'
+                }}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+              >
+                <input
+                  accept=".xlsx,.xls,.csv"
+                  style={{ display: 'none' }}
+                  id="mass-upload-file"
+                  type="file"
+                  onChange={handleFileChange}
+                />
+                <label htmlFor="mass-upload-file" style={{ cursor: 'pointer', display: 'block' }}>
+                  <CloudUploadIcon sx={{ fontSize: 48, color: isDragging ? '#1976d2' : '#9e9e9e', mb: 2 }} />
+                  <Typography variant="body1" sx={{ mb: 1, fontWeight: 'bold', color: isDragging ? '#1976d2' : 'inherit' }}>
+                    {isDragging ? 'Drop file here' : 'Drag & drop file here'}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                    or
+                  </Typography>
+                  <Button
+                    variant="contained"
+                    component="span"
+                    startIcon={<CloudUploadIcon />}
+                  >
+                    Choose File
+                  </Button>
+                  <Typography variant="caption" display="block" sx={{ mt: 2 }} color="text.secondary">
+                    Supported formats: Excel (.xlsx, .xls) or CSV (.csv) • Max size: 10MB
+                  </Typography>
+                </label>
+                {uploadFile && (
+                  <Box sx={{ mt: 3, p: 2, backgroundColor: '#e8f5e9', borderRadius: 1 }}>
+                    <Typography variant="body2" sx={{ color: 'success.main', fontWeight: 'bold' }}>
+                      ✓ Selected: <strong>{uploadFile.name}</strong>
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {(uploadFile.size / 1024).toFixed(2)} KB
+                    </Typography>
+                  </Box>
+                )}
+              </Box>
+
+              {uploadResults && (
+                <Box sx={{ mt: 2 }}>
+                  <Alert severity={uploadResults.summary.failed > 0 ? 'warning' : 'success'} sx={{ mb: 2 }}>
+                    <Typography variant="body2">
+                      <strong>Upload Results:</strong>
+                    </Typography>
+                    <Typography variant="body2">
+                      Total: {uploadResults.summary.total} | 
+                      Success: {uploadResults.summary.success} | 
+                      Failed: {uploadResults.summary.failed}
+                    </Typography>
+                  </Alert>
+
+                  {uploadResults.results.failed && uploadResults.results.failed.length > 0 && (
+                    <>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                        <Typography variant="subtitle2" color="error">
+                          Failed Items:
+                        </Typography>
+                        <Button
+                          variant="outlined"
+                          color="error"
+                          size="small"
+                          startIcon={<FileDownloadIcon />}
+                          onClick={handleExportFailedItems}
+                        >
+                          Export Failed Items
+                        </Button>
+                      </Box>
+                      <Box sx={{ maxHeight: 200, overflow: 'auto', border: '1px solid #ddd', borderRadius: 1, p: 2, backgroundColor: '#fff' }}>
+                        {uploadResults.results.failed.map((item, index) => (
+                          <Typography key={index} variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                            • <strong>Row {item.row}:</strong> {item.itemCode}
+                            <br />
+                            <span style={{ marginLeft: '12px', color: '#d32f2f' }}>
+                              {item.reason || 'Unknown error'}
+                            </span>
+                          </Typography>
+                        ))}
+                      </Box>
+                      <Alert severity="info" sx={{ mt: 2 }}>
+                        <Typography variant="body2">
+                          <strong>Tip:</strong> Click "Export Failed Items" to download an Excel file with the errors. 
+                          Fix the data in Excel and upload it again.
+                        </Typography>
+                      </Alert>
+                    </>
+                  )}
+                </Box>
+              )}
+            </Stack>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseMassUploadModal} color="inherit">
+            Close
+          </Button>
+          <Button 
+            onClick={handleMassUpload} 
+            variant="contained" 
+            color="primary"
+            disabled={!uploadFile || uploadLoading}
+            startIcon={uploadLoading ? <CircularProgress size={20} /> : <CloudUploadIcon />}
+          >
+            {uploadLoading ? 'Uploading...' : 'Upload'}
           </Button>
         </DialogActions>
       </Dialog>
