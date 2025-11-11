@@ -12,7 +12,16 @@ const verifyToken = (req, res, next) => {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     req.userId = decoded.userId;
     req.username = decoded.username;
+    req.email = decoded.email;
     req.role = decoded.role;
+    // Also set req.user for easier access
+    req.user = {
+      id: decoded.userId,
+      userId: decoded.userId,
+      username: decoded.username,
+      email: decoded.email,
+      role: decoded.role
+    };
     next();
   } catch (error) {
     res.status(401).json({ message: 'Invalid token.' });

@@ -10,6 +10,7 @@ const { getPool } = require('../config/database');
  * @param {string} [p.entityName]
  * @param {number} [p.userId]
  * @param {string} [p.userName]
+ * @param {string} [p.userEmail]
  * @param {string} [p.ip]
  * @param {any} [p.details] - arbitrary JSON-serializable payload
  */
@@ -23,6 +24,7 @@ async function logAudit(p = {}) {
       entityName = null,
       userId = null,
       userName = null,
+      userEmail = null,
       ip = null,
       details = null,
     } = p;
@@ -39,7 +41,7 @@ async function logAudit(p = {}) {
       `INSERT INTO audit_logs 
        (entity_type, entity_id, action, entity_name, user_id, user_name, ip_address, details)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [String(entityType), entityId !== null ? String(entityId) : null, String(action), entityName, userId, userName, ip, detailsJson]
+      [String(entityType), entityId !== null ? String(entityId) : null, String(action), entityName, userEmail || userId, userName, ip, detailsJson]
     );
   } catch (err) {
     // Swallow errors to avoid impacting business flow, but log to console

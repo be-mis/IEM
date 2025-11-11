@@ -2,7 +2,27 @@
 
 A comprehensive web-based system for managing item and branch exclusivity across multiple store chains and classifications.
 
-## 🚀 System Overview
+## 🚀 Quick Start (Production Deployment)
+
+### For Production Deployment:
+**Simply double-click: `start-production.bat`**
+
+Then access the application at: **http://192.168.0.138:3000**
+
+Default login:
+- Username: `admin`
+- Password: `admin123`
+
+**⚠️ Change the default password immediately after first login!**
+
+### For Detailed Instructions:
+- See **PRODUCTION_README.md** for quick start guide
+- See **DEPLOYMENT_GUIDE.md** for complete deployment instructions
+- See **DEPLOYMENT_CHECKLIST.md** for deployment checklist
+
+---
+
+## 🌟 System Overview
 
 The IEM system manages the exclusivity of items and branches across different store chains (Various, SM, Orocan) and classifications (ASEH, BSH, CSM, DSS, ESES) for various product categories (Lamps, Decors, Clocks, Stationery, Frames).
 
@@ -11,17 +31,26 @@ The IEM system manages the exclusivity of items and branches across different st
 ### Core Modules
 1. **Exclusivity Form** - Main interface for viewing and managing exclusivity assignments
 2. **Item Maintenance** - Add, edit, and remove item exclusivity assignments
-3. **Branch Maintenance** - Manage branch assignments by store classification
-4. **Reports** - Generate exclusivity reports
-5. **Audit Logs** - Track all system changes and user actions
+3. **Store Maintenance** - Manage branch assignments by store classification
+4. **User Management** - Manage user accounts and roles (Admin only)
+5. **Reports** - Generate exclusivity reports
+6. **Audit Logs** - Track all system changes and user actions (Admin only)
+
+### Authentication & Security
+- ✅ JWT-based authentication
+- ✅ Role-based access control (Admin, Manager, Employee)
+- ✅ Password reset via email
+- ✅ Secure session management
+- ✅ Comprehensive audit logging
 
 ### Key Capabilities
 - ✅ Dynamic filtering by chain, category, and store classification
 - ✅ Bulk operations for items and branches
 - ✅ Real-time data validation
-- ✅ Comprehensive audit logging
+- ✅ Email notifications (password reset)
 - ✅ Excel export functionality
 - ✅ Responsive Material-UI design
+- ✅ Network-accessible deployment
 
 ## 🛠️ Tech Stack
 
@@ -32,22 +61,75 @@ The IEM system manages the exclusivity of items and branches across different st
 - **React Router** - Navigation
 
 ### Backend
-- **Node.js** - Runtime environment
+- **Node.js v24.11.0** - Runtime environment
 - **Express.js** - Web framework
-- **MySQL/MariaDB** - Database
+- **MySQL** - Database
 - **mysql2** - Database driver
+- **JWT** - Authentication
+- **bcryptjs** - Password hashing
+- **nodemailer** - Email service
+
+### Email Service
+- **Brevo SMTP** - Password reset emails
+- **From:** helpdesk@everydayproductscorp.com
 
 ## 📁 Project Structure
 
 ```
 IEM/
+├── start-production.bat          # 🚀 One-click deployment script
+├── deploy.bat                    # Manual deployment script
+├── stop.bat                      # Stop all services
+├── PRODUCTION_README.md          # Quick start guide
+├── DEPLOYMENT_GUIDE.md           # Complete deployment guide
+├── DEPLOYMENT_CHECKLIST.md       # Deployment checklist
 ├── frontend/
+│   ├── .env                      # Frontend config (API URL)
 │   ├── src/
 │   │   ├── components/
-│   │   │   ├── Dashboard.js           # Main dashboard with navigation
-│   │   │   ├── ExclusivityForm.js     # Main exclusivity view
-│   │   │   ├── ItemMaintenance.js     # Item management
-│   │   │   ├── StoreMaintenance.js    # Branch management
+│   │   │   ├── Login.js          # Login page
+│   │   │   ├── SignUp.js         # Registration page
+│   │   │   ├── ForgotPassword.js # Password reset request
+│   │   │   ├── ResetPassword.js  # Password reset form
+│   │   │   ├── Dashboard.js      # Main dashboard with navigation
+│   │   │   ├── ExclusivityForm.js# Main exclusivity view
+│   │   │   ├── ItemMaintenance.js# Item management
+│   │   │   ├── StoreMaintenance.js# Branch management
+│   │   │   ├── UserMaintenance.js# User management (Admin)
+│   │   │   ├── AuditLogs.js      # Audit log viewer (Admin)
+│   │   │   └── Reports.js        # Reporting interface
+│   │   ├── context/
+│   │   │   └── AuthContext.js    # Authentication state
+│   │   └── utils/
+│   │       └── excelExport.js    # Excel export utility
+│   └── build/                    # Production build (created by npm run build)
+├── backend/
+│   ├── .env                      # Backend config (DB, Email, JWT)
+│   ├── server.js                 # Main server file
+│   ├── config/
+│   │   └── database.js           # Database connection
+│   ├── routes/
+│   │   ├── auth.js               # Authentication endpoints
+│   │   ├── inventory.js          # Item management endpoints
+│   │   ├── filters.js            # Filter data endpoints
+│   │   ├── dashboard.js          # Dashboard data endpoints
+│   │   ├── reports.js            # Report generation endpoints
+│   │   └── audit.js              # Audit log endpoints
+│   ├── middleware/
+│   │   └── auth.js               # JWT verification
+│   ├── utils/
+│   │   ├── auditLogger.js        # Audit logging utility
+│   │   ├── emailService.js       # Email sending service
+│   │   └── logger.js             # General logging
+│   └── migrations/               # Database migrations
+│       ├── migrate.js            # Migration runner
+│       ├── 001-011_*.js          # Migration files
+│       └── QUICKSTART.md         # Migration guide
+└── docs/
+    ├── EMAIL_CONFIGURATION_GUIDE.md  # Email setup guide
+    ├── AUDIT_LOGS_IMPLEMENTATION.md  # Audit system docs
+    └── UI_CONSISTENCY_GUIDELINES.md  # UI guidelines
+```
 │   │   │   ├── Filter.js              # Reusable filter component
 │   │   │   ├── Reports.js             # Reporting interface
 │   │   │   ├── AuditLogs.js           # Audit trail viewer

@@ -336,7 +336,7 @@ export default function AuditLogs() {
                                       </Typography>
 
                                       <Typography variant="subtitle2" color="text.secondary">
-                                        User ID
+                                        User Email
                                       </Typography>
                                       <Typography variant="body2">
                                         {log.user_id || 'N/A'}

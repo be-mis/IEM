@@ -42,10 +42,15 @@ export default function Login() {
       setLoading(true);
       setError('');
 
+      console.log('Attempting login to:', `${API_BASE_URL}/auth/login`);
+      console.log('Username:', formData.username);
+
       const response = await axios.post(`${API_BASE_URL}/auth/login`, {
         username: formData.username,
         password: formData.password
       });
+
+      console.log('Login successful:', response.data);
 
       // Store token and user data
       localStorage.setItem('token', response.data.token);
@@ -56,6 +61,7 @@ export default function Login() {
       
     } catch (err) {
       console.error('Login error:', err);
+      console.error('Error response:', err.response);
       setError(
         err.response?.data?.message || 
         'Login failed. Please check your credentials and try again.'
@@ -196,6 +202,25 @@ export default function Login() {
               )}
             </Button>
 
+            {/* Forgot Password Link */}
+            <Box sx={{ textAlign: 'center', mb: 2 }}>
+              <Link
+                component="button"
+                type="button"
+                variant="body2"
+                onClick={() => navigate('/forgot-password')}
+                sx={{
+                  textDecoration: 'none',
+                  color: '#667eea',
+                  '&:hover': {
+                    textDecoration: 'underline'
+                  }
+                }}
+              >
+                Forgot Password?
+              </Link>
+            </Box>
+
             {/* Sign Up Link */}
             <Box sx={{ textAlign: 'center' }}>
               <Typography variant="body2" color="text.secondary">
@@ -228,7 +253,7 @@ export default function Login() {
           align="center"
           sx={{ mt: 4, opacity: 0.9 }}
         >
-          © 2025 IEM System. All rights reserved.
+          © 2025 Item Exclusivity Module. All rights reserved.
         </Typography>
       </Container>
     </Box>

@@ -207,6 +207,7 @@ router.put('/items/:id/dispose', async (req, res) => {
         entityName: 'Item disposed',
         userId: req.user?.id || null,
         userName: req.user?.username || disposed_by || 'System',
+        userEmail: req.user?.email || req.email || null,
         ip: getIp(req),
         details: {
           reason: disposal_reason,
@@ -316,6 +317,7 @@ router.post('/items/:id/checkout', async (req, res) => {
         entityName: `Item assigned to ${assignedToName}`,
         userId: req.user?.id || null,
         userName: req.user?.username || 'System',
+        userEmail: req.user?.email || req.email || null,
         ip: getIp(req),
         details: {
           assignedTo: assignedToName,
@@ -412,6 +414,7 @@ router.post('/add-exclusivity-items', async (req, res) => {
             entityName: `${inserted.length} item(s)`,
             userId: req.user?.id || null,
             userName: req.user?.username || 'System',
+            userEmail: req.user?.email || req.email || null,
             ip: getIp(req),
             details: {
               items: inserted.map(r => ({
@@ -432,6 +435,7 @@ router.post('/add-exclusivity-items', async (req, res) => {
             entityName: `${updated.length} item(s)`,
             userId: req.user?.id || null,
             userName: req.user?.username || 'System',
+            userEmail: req.user?.email || req.email || null,
             ip: getIp(req),
             details: {
               items: updated.map(r => ({
@@ -531,6 +535,7 @@ router.post('/remove-exclusivity-item', async (req, res) => {
         entityName: `Removed ${column} from ${itemCode}`,
         userId: req.user?.id || null,
         userName: req.user?.username || 'System',
+        userEmail: req.user?.email || req.email || null,
         ip: getIp(req),
         details: {
           itemCode,
@@ -791,6 +796,7 @@ router.post('/mass-upload-exclusivity-items', upload.single('file'), async (req,
         entityName: `Mass upload: ${results.success.length} successful, ${results.failed.length} failed`,
         userId: req.user?.id || null,
         userName: req.user?.username || 'System',
+        userEmail: req.user?.email || req.email || null,
         ip: getIp(req),
         details: {
           fileName: req.file.originalname,
@@ -944,6 +950,7 @@ router.post('/add-exclusivity-branches', async (req, res) => {
           entityName: `${results.success.length} branch(es)`,
           userId: req.user?.id || null,
           userName: req.user?.username || 'System',
+          userEmail: req.user?.email || req.email || null,
           ip: getIp(req),
           details: {
             branches: results.success.map(r => ({
@@ -1220,6 +1227,7 @@ router.post('/mass-upload-exclusivity-branches', upload.single('file'), async (r
       entityName: `Mass upload: ${createdCount} created, ${updatedCount} updated, ${results.failed.length} failed`,
       userId: req.user?.id || null,
       userName: req.user?.username || 'System',
+      userEmail: req.user?.email || req.email || null,
       ip: getIp(req),
       details: auditDetails
     });
@@ -1248,3 +1256,4 @@ router.post('/mass-upload-exclusivity-branches', upload.single('file'), async (r
 });
 
 module.exports = router;
+

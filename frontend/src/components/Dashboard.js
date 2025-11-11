@@ -13,7 +13,7 @@ import {
   Dashboard as DashboardIcon, Add as AddIcon, ViewList as ViewListIcon, CheckCircle as ReceiveIcon, Inventory2Outlined, StoreMallDirectoryOutlined,
   Assignment as AssignIcon, Assessment as ReportsIcon, Menu as MenuIcon, Inventory2, Build, AttachMoney, ExpandLessOutlined, 
   Description, TrendingUp, Warning, CheckCircleOutline, Star, AutoAwesome, TuneOutlined, AssignmentTurnedIn as Assignment, Delete,
-  Visibility as VisibilityIcon, Edit as EditIcon, Save as SaveIcon, Cancel as CancelIcon, DeleteForever as DeleteForeverIcon, DescriptionOutlined, History as HistoryIcon, Logout as LogoutIcon } from '@mui/icons-material';
+  Visibility as VisibilityIcon, Edit as EditIcon, Save as SaveIcon, Cancel as CancelIcon, DeleteForever as DeleteForeverIcon, DescriptionOutlined, History as HistoryIcon, Logout as LogoutIcon, People as PeopleIcon } from '@mui/icons-material';
 
 import { styled, createTheme, ThemeProvider } from '@mui/material/styles';
 import MuiAlert from '@mui/material/Alert';
@@ -26,6 +26,7 @@ import ExclusivityForm from '../components/ExclusivityForm';
 import ItemMaintenance from '../components/ItemMaintenance';
 import StoreMaintenance from '../components/StoreMaintenance';
 import AuditLogs from '../components/AuditLogs';
+import UserMaintenance from '../components/UserMaintenance';
 
 
 // Create clean white theme
@@ -198,17 +199,27 @@ const Dashboard = () => {
   
 
   // Update menuItems to include Disposal
-  const menuItems = [
+  const allMenuItems = [
     { text: 'Exclusivity Form', icon: <DescriptionOutlined />, view: 'exclusivityform' },
     { text: 'Item Maintenance', icon: <Inventory2Outlined />, view: 'itemmaintenance' },
     { text: 'Store Maintenance', icon: <StoreMallDirectoryOutlined />, view: 'storemaintenance' },
-    { text: 'Audit Logs', icon: <HistoryIcon />, view: 'auditlogs' },
+    { text: 'User Management', icon: <PeopleIcon />, view: 'usermanagement', adminOnly: true },
+    { text: 'Audit Logs', icon: <HistoryIcon />, view: 'auditlogs', adminOnly: true },
     // { text: 'View Items', icon: <ViewListIcon />, view: 'view' },
     // { text: 'Assign', icon: <AssignIcon />, view: 'assign' },
     // { text: 'Receive', icon: <ReceiveIcon />, view: 'receive' },
     // { text: 'Reports', icon: <ReportsIcon />, view: 'reports' },
     // { text: 'Disposal', icon: <DeleteForeverIcon />, view: 'disposal' },
   ];
+
+  // Filter menu items based on user role
+  const menuItems = allMenuItems.filter(item => {
+    // If item is admin only, check if user is admin
+    if (item.adminOnly) {
+      return user?.role === 'admin';
+    }
+    return true;
+  });
 
   // Enhanced add item handler with more fields
   const handleAddItem = async () => {
@@ -338,7 +349,47 @@ const Dashboard = () => {
             </UltraModernCard>
           </Box>
         );
+      case 'usermanagement':
+        // Only admin users can access user management
+        if (user?.role !== 'admin') {
+          // Redirect to exclusivity form if not admin
+          setCurrentView('exclusivityform');
+          return (
+            <UltraModernCard>
+              <CardContent sx={{ p: 4 }}>
+                <MuiAlert severity="warning" sx={{ mb: 2 }}>
+                  You don't have permission to access User Management. Admin access required.
+                </MuiAlert>
+                <ExclusivityForm />
+              </CardContent>
+            </UltraModernCard>
+          );
+        }
+        return (
+          <Box sx={{ mb: 4 }}>
+            <UltraModernCard>
+              <CardContent sx={{ p: 4 }}>
+                <UserMaintenance />
+              </CardContent>
+            </UltraModernCard>
+          </Box>
+        );
       case 'auditlogs':
+        // Only admin users can access audit logs
+        if (user?.role !== 'admin') {
+          // Redirect to exclusivity form if not admin
+          setCurrentView('exclusivityform');
+          return (
+            <UltraModernCard>
+              <CardContent sx={{ p: 4 }}>
+                <MuiAlert severity="warning" sx={{ mb: 2 }}>
+                  You don't have permission to access Audit Logs. Admin access required.
+                </MuiAlert>
+                <ExclusivityForm />
+              </CardContent>
+            </UltraModernCard>
+          );
+        }
         return (
           <Box sx={{ mb: 4 }}>
             <UltraModernCard>
@@ -444,6 +495,7 @@ const Dashboard = () => {
                 {currentView === 'exclusivityform' ? 'Exclusivity Form' :
                  currentView === 'itemmaintenance' ? 'Item Maintenance' :
                  currentView === 'storemaintenance' ? 'Store Maintenance' :
+                 currentView === 'usermanagement' ? 'User Management' :
                  currentView === 'auditlogs' ? 'Audit Logs' : 'Exclusivity Form'}
               </Typography>
               

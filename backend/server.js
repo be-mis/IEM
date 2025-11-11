@@ -2,6 +2,7 @@
 const express = require('express');
 const cors = require('cors');
 const { connectDatabase, initializeDatabase } = require('./config/database');
+const { verifyEmailConfig } = require('./utils/emailService');
 const inventoryRoutes = require('./routes/inventory');
 const authRoutes = require('./routes/auth');
 const filtersRoutes = require('./routes/filters');
@@ -14,7 +15,7 @@ const PORT = process.env.PORT || 5000;
 const HOST = '0.0.0.0'; // Listen on all network interfaces
 
 // Middleware - Updated CORS to allow your network IP
-const allowed = new RegExp(/^http:\/\/(localhost|127\.0\.0\.1|192\.168\.0\.\d+):3000$/);
+const allowed = new RegExp(/^http:\/\/(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+):3020$/);
 app.use(cors({
   origin: (origin, cb) => {
     if (!origin || allowed.test(origin)) return cb(null, true);
@@ -110,6 +111,15 @@ const startServer = async () => {
     // Initialize database (create tables, default data)
     await initializeDatabase();
     //console.log('✅ Database initialized successfully');
+    
+    // Check email configuration
+    if (process.env.EMAIL_USER && process.env.EMAIL_PASSWORD) {
+      console.log('📧 Verifying email configuration...');
+      await verifyEmailConfig();
+    } else {
+      console.log('⚠️  Email not configured - Password reset emails will not be sent');
+      console.log('   To enable email: Set EMAIL_USER and EMAIL_PASSWORD in .env file');
+    }
     
     // Start the server on all network interfaces
     app.listen(PORT, HOST, () => {

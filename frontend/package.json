@@ -16,8 +16,8 @@
     "xlsx": "^0.18.5"
   },
   "scripts": {
-    "start": "react-scripts start",
-    "start:network": "HOST=192.168.0.138 react-scripts start",
+    "start": "set PORT=3020 && react-scripts start",
+    "start:network": "HOST=192.168.1.229 PORT=3020 react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject"
