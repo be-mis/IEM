@@ -70,8 +70,8 @@ The IEM system manages the exclusivity of items and branches across different st
 - **nodemailer** - Email service
 
 ### Email Service
-- **Brevo SMTP** - Password reset emails
-- **From:** helpdesk@everydayproductscorp.com
+- **Brevo SMTP** - 
+- **From:** 
 
 ## 📁 Project Structure
 
