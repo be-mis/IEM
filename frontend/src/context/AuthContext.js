@@ -25,7 +25,19 @@ export const AuthProvider = ({ children }) => {
 
     if (storedToken && storedUser) {
       setToken(storedToken);
-      setUser(JSON.parse(storedUser));
+      
+      // Parse user and normalize business_unit to businessUnit
+      const parsedUser = JSON.parse(storedUser);
+      
+      // Handle legacy data: convert business_unit to businessUnit if needed
+      if (parsedUser.business_unit && !parsedUser.businessUnit) {
+        parsedUser.businessUnit = parsedUser.business_unit;
+        delete parsedUser.business_unit;
+        // Update localStorage with normalized data
+        localStorage.setItem('user', JSON.stringify(parsedUser));
+      }
+      
+      setUser(parsedUser);
       
       // Set default authorization header
       axios.defaults.headers.common['Authorization'] = `Bearer ${storedToken}`;
@@ -41,11 +53,17 @@ export const AuthProvider = ({ children }) => {
         password
       });
 
+      console.log('=== AUTH CONTEXT LOGIN DEBUG ===');
+      console.log('Full response:', response.data);
+      console.log('User data received:', response.data.user);
+
       const { token: newToken, user: userData } = response.data;
 
       // Store in localStorage
       localStorage.setItem('token', newToken);
       localStorage.setItem('user', JSON.stringify(userData));
+      
+      console.log('Stored in localStorage:', localStorage.getItem('user'));
 
       // Set state
       setToken(newToken);

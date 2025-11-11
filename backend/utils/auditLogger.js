@@ -39,9 +39,9 @@ async function logAudit(p = {}) {
 
     await pool.execute(
       `INSERT INTO audit_logs 
-       (entity_type, entity_id, action, entity_name, user_id, user_name, ip_address, details)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [String(entityType), entityId !== null ? String(entityId) : null, String(action), entityName, userEmail || userId, userName, ip, detailsJson]
+       (entity_type, entity_id, action, entity_name, user_id, user_name, user_email, ip_address, details)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [String(entityType), entityId !== null ? String(entityId) : null, String(action), entityName, userId, userName, userEmail, ip, detailsJson]
     );
   } catch (err) {
     // Swallow errors to avoid impacting business flow, but log to console

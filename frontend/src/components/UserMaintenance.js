@@ -124,7 +124,7 @@ export default function UserMaintenance() {
       email: user.email,
       password: '', // Don't populate password for edit
       role: user.role,
-      is_active: user.is_active
+      is_active: Boolean(user.is_active)
     });
     setSelectedUser(user);
     setOpenDialog(true);
@@ -188,9 +188,9 @@ export default function UserMaintenance() {
           is_active: formData.is_active
         };
         
-        // Only include password if provided
-        if (formData.password) {
-          updateData.password = formData.password;
+        // Only include password if provided (and not empty after trim)
+        if (formData.password && formData.password.trim()) {
+          updateData.password = formData.password.trim();
         }
 
         await axios.put(`${API_BASE_URL}/auth/users/${selectedUser.id}`, updateData, {

@@ -56,6 +56,7 @@ router.get('/logs', async (req, res) => {
         entity_name,
         user_id,
         user_name,
+        user_email,
         ip_address,
         details,
         created_at

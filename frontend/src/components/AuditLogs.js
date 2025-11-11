@@ -329,17 +329,10 @@ export default function AuditLogs() {
                                   <Grid container spacing={2}>
                                     <Grid item xs={12} md={6}>
                                       <Typography variant="subtitle2" color="text.secondary">
-                                        Entity ID
-                                      </Typography>
-                                      <Typography variant="body2" sx={{ mb: 1 }}>
-                                        {log.entity_id || 'N/A'}
-                                      </Typography>
-
-                                      <Typography variant="subtitle2" color="text.secondary">
                                         User Email
                                       </Typography>
                                       <Typography variant="body2">
-                                        {log.user_id || 'N/A'}
+                                        {log.user_email || 'N/A'}
                                       </Typography>
                                     </Grid>
 

@@ -20,7 +20,8 @@ export default function SignUp() {
     email: '',
     password: '',
     confirmPassword: '',
-    role: 'employee'
+    role: 'employee',
+    businessUnit: ''
   });
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -37,7 +38,7 @@ export default function SignUp() {
   };
 
   const validateForm = () => {
-    if (!formData.username || !formData.email || !formData.password || !formData.confirmPassword) {
+    if (!formData.username || !formData.email || !formData.password || !formData.confirmPassword || !formData.businessUnit) {
       setError('All fields are required');
       return false;
     }
@@ -85,7 +86,8 @@ export default function SignUp() {
         username: formData.username,
         email: formData.email,
         password: formData.password,
-        role: formData.role
+        role: formData.role,
+        businessUnit: formData.businessUnit
       });
 
       setSuccess(true);
@@ -218,6 +220,22 @@ export default function SignUp() {
               }}
               autoComplete="email"
             />
+
+            <FormControl fullWidth sx={{ mb: 2 }}>
+              <InputLabel>Business Unit</InputLabel>
+              <Select
+                value={formData.businessUnit}
+                onChange={handleChange('businessUnit')}
+                label="Business Unit"
+                disabled={loading || success}
+              >
+                <MenuItem value="">
+                  <em>Select Business Unit</em>
+                </MenuItem>
+                <MenuItem value="NBFI">NBFI</MenuItem>
+                <MenuItem value="EPC">EPC</MenuItem>
+              </Select>
+            </FormControl>
 
             <TextField
               fullWidth

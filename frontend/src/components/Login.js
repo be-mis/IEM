@@ -7,12 +7,11 @@ import {
   Visibility, VisibilityOff, LockOutlined, PersonOutline
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
-
-const API_BASE_URL = process.env.REACT_APP_API_BASE || 'http://localhost:5000/api';
+import { useAuth } from '../context/AuthContext';
 
 export default function Login() {
   const navigate = useNavigate();
+  const { login } = useAuth();
   const [formData, setFormData] = useState({
     username: '',
     password: ''
@@ -42,30 +41,25 @@ export default function Login() {
       setLoading(true);
       setError('');
 
-      console.log('Attempting login to:', `${API_BASE_URL}/auth/login`);
-      console.log('Username:', formData.username);
+      console.log('Attempting login with username:', formData.username);
 
-      const response = await axios.post(`${API_BASE_URL}/auth/login`, {
-        username: formData.username,
-        password: formData.password
-      });
+      const result = await login(formData.username, formData.password);
 
-      console.log('Login successful:', response.data);
-
-      // Store token and user data
-      localStorage.setItem('token', response.data.token);
-      localStorage.setItem('user', JSON.stringify(response.data.user));
-
-      // Redirect to dashboard
-      navigate('/dashboard');
+      if (result.success) {
+        console.log('Login successful');
+        console.log('=== LOGIN RESULT DEBUG ===');
+        console.log('Result object:', result);
+        console.log('User from AuthContext after login:', localStorage.getItem('user'));
+        // Navigate to dashboard
+        navigate('/dashboard/exclusivity-form');
+      } else {
+        console.error('Login failed:', result.error);
+        setError(result.error || 'Login failed. Please check your credentials and try again.');
+      }
       
     } catch (err) {
       console.error('Login error:', err);
-      console.error('Error response:', err.response);
-      setError(
-        err.response?.data?.message || 
-        'Login failed. Please check your credentials and try again.'
-      );
+      setError('Login failed. Please check your credentials and try again.');
     } finally {
       setLoading(false);
     }

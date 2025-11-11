@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 // MUI Core Components
 import { Box, Drawer, AppBar, Toolbar, List, Typography, IconButton, ListItem, ListItemButton, ListItemIcon, ListItemText, Card, CardContent, Grid, Button,
@@ -118,12 +118,54 @@ const UltraModernCard = styled(Card)(({ theme }) => ({
 const Dashboard = () => {
   const theme = useTheme();
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, logout } = useAuth();
+  
+  // TEMPORARY DEBUG - Remove after testing
+  useEffect(() => {
+    console.log('=== DASHBOARD DEBUG ===');
+    console.log('User from context:', user);
+    console.log('User from localStorage:', localStorage.getItem('user'));
+    console.log('Parsed user:', JSON.parse(localStorage.getItem('user') || '{}'));
+  }, [user]);
+  
   const [mobileOpen, setMobileOpen] = useState(false);
   const [currentView, setCurrentView] = useState('exclusivityform');
   const [openDetailsDialog, setOpenDetailsDialog] = useState(null);
   const [details, setDetails] = useState(null);
   const [loading, setLoading] = useState(false); // Added loading state
+
+  // Sync currentView with URL
+  useEffect(() => {
+    const path = location.pathname;
+    if (path.includes('exclusivity-form')) {
+      setCurrentView('exclusivityform');
+    } else if (path.includes('item-maintenance')) {
+      setCurrentView('itemmaintenance');
+    } else if (path.includes('store-maintenance')) {
+      setCurrentView('storemaintenance');
+    } else if (path.includes('user-management')) {
+      setCurrentView('usermanagement');
+    } else if (path.includes('audit-logs')) {
+      setCurrentView('auditlogs');
+    } else {
+      setCurrentView('exclusivityform');
+    }
+  }, [location.pathname]);
+
+  // Redirect non-EPC users away from EPC-only pages
+  useEffect(() => {
+    const hasEpcAccess = user?.role === 'admin' || user?.businessUnit === 'EPC';
+    const epcOnlyViews = ['exclusivityform', 'itemmaintenance', 'storemaintenance'];
+    
+    if (!hasEpcAccess && epcOnlyViews.includes(currentView)) {
+      // Redirect to user management if admin, otherwise show a warning
+      if (user?.role === 'admin') {
+        navigate('/dashboard/user-management');
+      }
+      // For non-EPC users, the renderCurrentView will show the warning message
+    }
+  }, [currentView, user, navigate]);
 
   // Hooks
   // const { items, loading: itemsLoading, error, addItem, deleteItem, updateItem, checkOutItem, checkInItem } = useInventoryItems();
@@ -200,11 +242,11 @@ const Dashboard = () => {
 
   // Update menuItems to include Disposal
   const allMenuItems = [
-    { text: 'Exclusivity Form', icon: <DescriptionOutlined />, view: 'exclusivityform' },
-    { text: 'Item Maintenance', icon: <Inventory2Outlined />, view: 'itemmaintenance' },
-    { text: 'Store Maintenance', icon: <StoreMallDirectoryOutlined />, view: 'storemaintenance' },
-    { text: 'User Management', icon: <PeopleIcon />, view: 'usermanagement', adminOnly: true },
-    { text: 'Audit Logs', icon: <HistoryIcon />, view: 'auditlogs', adminOnly: true },
+    { text: 'Exclusivity Form', icon: <DescriptionOutlined />, view: 'exclusivityform', path: '/dashboard/exclusivity-form', epcOnly: true },
+    { text: 'Item Maintenance', icon: <Inventory2Outlined />, view: 'itemmaintenance', path: '/dashboard/item-maintenance', epcOnly: true },
+    { text: 'Store Maintenance', icon: <StoreMallDirectoryOutlined />, view: 'storemaintenance', path: '/dashboard/store-maintenance', epcOnly: true },
+    { text: 'User Management', icon: <PeopleIcon />, view: 'usermanagement', adminOnly: true, path: '/dashboard/user-management' },
+    { text: 'Audit Logs', icon: <HistoryIcon />, view: 'auditlogs', adminOnly: true, path: '/dashboard/audit-logs' },
     // { text: 'View Items', icon: <ViewListIcon />, view: 'view' },
     // { text: 'Assign', icon: <AssignIcon />, view: 'assign' },
     // { text: 'Receive', icon: <ReceiveIcon />, view: 'receive' },
@@ -212,12 +254,26 @@ const Dashboard = () => {
     // { text: 'Disposal', icon: <DeleteForeverIcon />, view: 'disposal' },
   ];
 
-  // Filter menu items based on user role
+  // Filter menu items based on user role and business unit
   const menuItems = allMenuItems.filter(item => {
+    // TEMPORARY DEBUG
+    console.log('--- Filtering:', item.text);
+    console.log('    adminOnly:', item.adminOnly, ', epcOnly:', item.epcOnly);
+    console.log('    user.role:', user?.role, ', user.businessUnit:', user?.businessUnit);
+    
     // If item is admin only, check if user is admin
     if (item.adminOnly) {
-      return user?.role === 'admin';
+      const result = user?.role === 'admin';
+      console.log('    Admin check result:', result);
+      return result;
     }
+    // If item is EPC only, check if user is admin OR has EPC business unit
+    if (item.epcOnly) {
+      const result = user?.role === 'admin' || user?.businessUnit === 'EPC';
+      console.log('    EPC check result:', result, '(admin:', user?.role === 'admin', 'isEPC:', user?.businessUnit === 'EPC', ')');
+      return result;
+    }
+    console.log('    Default: true');
     return true;
   });
 
@@ -326,87 +382,60 @@ const Dashboard = () => {
   };
 
   const renderCurrentView = () => {
+    // Helper function to check if user has access to EPC-only pages
+    const hasEpcAccess = user?.role === 'admin' || user?.businessUnit === 'EPC';
+
     switch (currentView) {
       case 'itemmaintenance':
-        return (
-          <Box sx={{ mb: 4 }}>
-            {/* <Typography variant="h4" sx={{ color: '#1f2937', mb: 2 }}>Add New Item</Typography> */}
-            <UltraModernCard>
-              <CardContent sx={{ p: 4 }}>
-                <ItemMaintenance />
-              </CardContent>
-            </UltraModernCard>
-          </Box>
-        );
+        if (!hasEpcAccess) {
+          return (
+            <MuiAlert severity="warning">
+              You don't have permission to access Item Maintenance. EPC business unit access required.
+            </MuiAlert>
+          );
+        }
+        return <ItemMaintenance />;
+      
       case 'storemaintenance':
-        return (
-          <Box sx={{ mb: 4 }}>
-            {/* <Typography variant="h4" sx={{ color: '#1f2937', mb: 2 }}>Add New Item</Typography> */}
-            <UltraModernCard>
-              <CardContent sx={{ p: 4 }}>
-                <StoreMaintenance />
-              </CardContent>
-            </UltraModernCard>
-          </Box>
-        );
+        if (!hasEpcAccess) {
+          return (
+            <MuiAlert severity="warning">
+              You don't have permission to access Store Maintenance. EPC business unit access required.
+            </MuiAlert>
+          );
+        }
+        return <StoreMaintenance />;
+      
       case 'usermanagement':
-        // Only admin users can access user management
         if (user?.role !== 'admin') {
-          // Redirect to exclusivity form if not admin
-          setCurrentView('exclusivityform');
           return (
-            <UltraModernCard>
-              <CardContent sx={{ p: 4 }}>
-                <MuiAlert severity="warning" sx={{ mb: 2 }}>
-                  You don't have permission to access User Management. Admin access required.
-                </MuiAlert>
-                <ExclusivityForm />
-              </CardContent>
-            </UltraModernCard>
+            <MuiAlert severity="warning">
+              You don't have permission to access User Management. Admin access required.
+            </MuiAlert>
           );
         }
-        return (
-          <Box sx={{ mb: 4 }}>
-            <UltraModernCard>
-              <CardContent sx={{ p: 4 }}>
-                <UserMaintenance />
-              </CardContent>
-            </UltraModernCard>
-          </Box>
-        );
+        return <UserMaintenance />;
+      
       case 'auditlogs':
-        // Only admin users can access audit logs
         if (user?.role !== 'admin') {
-          // Redirect to exclusivity form if not admin
-          setCurrentView('exclusivityform');
           return (
-            <UltraModernCard>
-              <CardContent sx={{ p: 4 }}>
-                <MuiAlert severity="warning" sx={{ mb: 2 }}>
-                  You don't have permission to access Audit Logs. Admin access required.
-                </MuiAlert>
-                <ExclusivityForm />
-              </CardContent>
-            </UltraModernCard>
+            <MuiAlert severity="warning">
+              You don't have permission to access Audit Logs. Admin access required.
+            </MuiAlert>
           );
         }
-        return (
-          <Box sx={{ mb: 4 }}>
-            <UltraModernCard>
-              <CardContent sx={{ p: 4 }}>
-                <AuditLogs />
-              </CardContent>
-            </UltraModernCard>
-          </Box>
-        );
+        return <AuditLogs />;
+      
+      case 'exclusivityform':
       default:
-        return (
-            <UltraModernCard>
-              <CardContent sx={{ p: 4 }}>
-                <ExclusivityForm />
-              </CardContent>
-            </UltraModernCard>
-        );
+        if (!hasEpcAccess) {
+          return (
+            <MuiAlert severity="warning">
+              You don't have permission to access Exclusivity Form. EPC business unit access required.
+            </MuiAlert>
+          );
+        }
+        return <ExclusivityForm />;
     }
   };
 
@@ -437,7 +466,7 @@ const Dashboard = () => {
           <ListItem key={item.text} disablePadding>
             <NavItem
               active={currentView === item.view ? 1 : 0}
-              onClick={() => setCurrentView(item.view)}
+              onClick={() => navigate(item.path)}
             >
               <ListItemIcon sx={{ color: 'inherit', minWidth: 48 }}>
                 {item.icon}
@@ -551,6 +580,7 @@ const Dashboard = () => {
   
           <Box
             component="main"
+            key={currentView}
             sx={{
               flexGrow: 1,
               width: { md: `calc(100% - ${drawerWidth}px)` },
@@ -569,7 +599,11 @@ const Dashboard = () => {
               display: 'flex',
               flexDirection: 'column',
             }}>
-              {renderCurrentView()}
+              <UltraModernCard>
+                <CardContent sx={{ p: 4 }}>
+                  {renderCurrentView()}
+                </CardContent>
+              </UltraModernCard>
             </Box>
           </Box>
         </Box>

@@ -14,13 +14,15 @@ const verifyToken = (req, res, next) => {
     req.username = decoded.username;
     req.email = decoded.email;
     req.role = decoded.role;
+    req.businessUnit = decoded.businessUnit;
     // Also set req.user for easier access
     req.user = {
       id: decoded.userId,
       userId: decoded.userId,
       username: decoded.username,
       email: decoded.email,
-      role: decoded.role
+      role: decoded.role,
+      businessUnit: decoded.businessUnit
     };
     next();
   } catch (error) {

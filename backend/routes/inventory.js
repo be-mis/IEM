@@ -3,6 +3,7 @@ const express = require('express');
 const router = express.Router();
 const { getPool } = require('../config/database');
 const { logAudit, getIp } = require('../utils/auditLogger');
+const { verifyToken } = require('../middleware/auth');
 const multer = require('multer');
 const XLSX = require('xlsx');
 
@@ -340,7 +341,7 @@ router.post('/items/:id/checkout', async (req, res) => {
 });
 
 // POST /api/inventory/add-exclusivity-items - Add items to exclusivity list
-router.post('/add-exclusivity-items', async (req, res) => {
+router.post('/add-exclusivity-items', verifyToken, async (req, res) => {
   try {
     const pool = getPool();
     const { items } = req.body;
@@ -474,7 +475,7 @@ router.post('/add-exclusivity-items', async (req, res) => {
 });
 
 // DELETE /api/inventory/remove-exclusivity-item - Remove item from exclusivity by setting column to 0
-router.post('/remove-exclusivity-item', async (req, res) => {
+router.post('/remove-exclusivity-item', verifyToken, async (req, res) => {
   try {
     const pool = getPool();
     const { itemCode, column } = req.body;
@@ -564,7 +565,7 @@ router.post('/remove-exclusivity-item', async (req, res) => {
 });
 
 // POST /api/inventory/mass-upload-exclusivity-items - Mass upload items from Excel/CSV
-router.post('/mass-upload-exclusivity-items', upload.single('file'), async (req, res) => {
+router.post('/mass-upload-exclusivity-items', verifyToken, upload.single('file'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No file uploaded' });
@@ -846,8 +847,132 @@ router.post('/mass-upload-exclusivity-items', upload.single('file'), async (req,
   }
 });
 
+// POST /api/inventory/remove-exclusivity-branches - Remove branches from exclusivity by setting column to null
+router.post('/remove-exclusivity-branches', verifyToken, async (req, res) => {
+  try {
+    const pool = getPool();
+    const { branchCodes, chain, category, storeClass } = req.body;
+
+    console.log('🗑️ Remove branches request:', { branchCodes, chain, category, storeClass });
+
+    if (!branchCodes || !Array.isArray(branchCodes) || branchCodes.length === 0) {
+      return res.status(400).json({ error: 'branchCodes array is required' });
+    }
+
+    if (!chain || !category || !storeClass) {
+      return res.status(400).json({ error: 'chain, category, and storeClass are required' });
+    }
+
+    // Dynamically fetch valid category columns from the database
+    const [categoryColumns] = await pool.execute(`
+      SELECT COLUMN_NAME 
+      FROM INFORMATION_SCHEMA.COLUMNS 
+      WHERE TABLE_SCHEMA = DATABASE() 
+        AND TABLE_NAME = 'epc_branches'
+        AND COLUMN_NAME LIKE '%Class'
+        AND COLUMN_NAME NOT IN ('chainCode', 'created_at', 'updated_at')
+    `);
+    
+    // Create a map of category name to column name
+    const categoryColumnMap = {};
+    categoryColumns.forEach(col => {
+      const columnName = col.COLUMN_NAME;
+      const categoryName = columnName.replace(/Class$/, '').toLowerCase();
+      categoryColumnMap[categoryName] = columnName;
+    });
+
+    // Determine the category column name
+    const categoryLower = category.toLowerCase();
+    const categoryColumn = categoryColumnMap[categoryLower];
+    
+    if (!categoryColumn) {
+      return res.status(400).json({ 
+        error: `Invalid category: ${category}. Valid categories: ${Object.keys(categoryColumnMap).join(', ')}`
+      });
+    }
+
+    const results = {
+      success: [],
+      failed: []
+    };
+
+    for (const branchCode of branchCodes) {
+      try {
+        // Update the branch's category column to NULL to remove exclusivity
+        const updateQuery = `
+          UPDATE epc_branches 
+          SET ${categoryColumn} = NULL, updated_at = CURRENT_TIMESTAMP
+          WHERE branchCode = ?
+        `;
+        
+        const [result] = await pool.execute(updateQuery, [branchCode]);
+        
+        if (result.affectedRows === 0) {
+          results.failed.push({
+            branchCode,
+            reason: 'Branch not found'
+          });
+          continue;
+        }
+
+        results.success.push(branchCode);
+
+      } catch (error) {
+        console.error(`Error processing branch ${branchCode}:`, error);
+        results.failed.push({
+          branchCode,
+          reason: error.message
+        });
+      }
+    }
+
+    // Log audit trail for successful removals
+    if (results.success.length > 0) {
+      try {
+        await logAudit({
+          entityType: 'branch_exclusivity',
+          entityId: null,
+          action: 'bulk_remove',
+          entityName: `${results.success.length} branch(es)`,
+          userId: req.user?.id || null,
+          userName: req.user?.username || 'System',
+          userEmail: req.user?.email || req.email || null,
+          ip: getIp(req),
+          details: {
+            branchCodes: results.success,
+            category,
+            storeClass,
+            column: categoryColumn,
+            count: results.success.length
+          }
+        });
+      } catch (auditError) {
+        console.error('Error logging audit trail:', auditError);
+      }
+    }
+
+    const responseStatus = results.failed.length > 0 ? 207 : 200; // 207 Multi-Status if some failed
+    res.status(responseStatus).json({
+      message: 'Branches processed',
+      summary: {
+        total: branchCodes.length,
+        success: results.success.length,
+        failed: results.failed.length
+      },
+      results
+    });
+
+  } catch (error) {
+    console.error('Error removing exclusivity branches:', error);
+    res.status(500).json({ 
+      error: 'Failed to remove branches',
+      message: error.message 
+    });
+  }
+});
+
 // POST /api/inventory/add-exclusivity-branches - Add branches to exclusivity list
-router.post('/add-exclusivity-branches', async (req, res) => {
+router.post('/add-exclusivity-branches', verifyToken, async (req, res) => {
   try {
     const pool = getPool();
     const { branches } = req.body;
@@ -989,7 +1114,7 @@ router.post('/add-exclusivity-branches', async (req, res) => {
 });
 
 // POST /api/inventory/mass-upload-exclusivity-branches - Mass upload new branches from Excel file
-router.post('/mass-upload-exclusivity-branches', upload.single('file'), async (req, res) => {
+router.post('/mass-upload-exclusivity-branches', verifyToken, upload.single('file'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No file uploaded' });

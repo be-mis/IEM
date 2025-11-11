@@ -123,13 +123,9 @@ const startServer = async () => {
     
     // Start the server on all network interfaces
     app.listen(PORT, HOST, () => {
-      //console.log(`🚀 Server running on http://${HOST}:${PORT}`);
-      //console.log(`🌐 Network Access: http://192.168.0.138:${PORT}`);
-      //console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
-      //console.log(`🔗 Local API URL: http://localhost:${PORT}/api`);
-      //console.log(`🔗 Network API URL: http://192.168.0.138:${PORT}/api`);
-      //console.log(`🏥 Health Check: http://192.168.0.138:${PORT}/health`);
-      //console.log(`📱 Officemates can access at: http://192.168.0.138:${PORT}`);
+      console.log(`🚀 Server running on http://${HOST}:${PORT}`);
+      console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
+      console.log(`✅ Backend is ready to accept requests`);
     });
   } catch (error) {
     //console.error('❌ Failed to start server:', error);

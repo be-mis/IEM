@@ -45,7 +45,9 @@ router.post('/login', async (req, res) => {
     }
     
     const user = users[0];
+    console.log('Login attempt for user:', username, '| Stored hash length:', user.password?.length);
     const validPassword = await bcrypt.compare(password, user.password);
+    console.log('Password validation result:', validPassword);
     
     if (!validPassword) {
       // Log failed login attempt - invalid password
@@ -72,7 +74,8 @@ router.post('/login', async (req, res) => {
         userId: user.id, 
         username: user.username,
         email: user.email,
-        role: user.role 
+        role: user.role,
+        businessUnit: user.business_unit
       },
       process.env.JWT_SECRET || 'fallback-secret',
       { expiresIn: '24h' }
@@ -106,7 +109,8 @@ router.post('/login', async (req, res) => {
         id: user.id,
         username: user.username,
         email: user.email,
-        role: user.role
+        role: user.role,
+        businessUnit: user.business_unit
       }
     });
   } catch (error) {
@@ -466,9 +470,11 @@ router.put('/users/:id', authenticateToken, requireAdmin, async (req, res) => {
     }
     
     if (password) {
+      console.log('Updating password for user:', username);
       const hashedPassword = await bcrypt.hash(password, 10);
       updates.push('password = ?');
       values.push(hashedPassword);
+      console.log('Password hashed successfully');
     }
     
     if (role) {

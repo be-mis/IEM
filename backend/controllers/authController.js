@@ -1,12 +1,12 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const db = require('../config/database');
+const { getPool } = require('../config/database');
 const { logAudit, getIp } = require('../utils/auditLogger');
 
 // Generate JWT token
-const generateToken = (userId, username, role) => {
+const generateToken = (userId, username, role, businessUnit) => {
   return jwt.sign(
-    { userId, username, role },
+    { userId, username, role, businessUnit },
     process.env.JWT_SECRET,
     { expiresIn: '24h' }
   );
@@ -23,7 +23,8 @@ const login = async (req, res) => {
     }
 
     // Find user in database
-    const [users] = await db.execute(
+    const pool = getPool();
+    const [users] = await pool.execute(
       'SELECT * FROM users WHERE username = ? OR email = ?',
       [username, username]
     );
@@ -34,6 +35,12 @@ const login = async (req, res) => {
 
     const user = users[0];
 
+    // DEBUG: Log the user object from database
+    console.log('=== USER FROM DATABASE ===');
+    console.log('Full user object:', user);
+    console.log('user.business_unit value:', user.business_unit);
+    console.log('Type of business_unit:', typeof user.business_unit);
+
     // Check password
     const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) {
@@ -41,7 +48,7 @@ const login = async (req, res) => {
     }
 
     // Generate token
-    const token = generateToken(user.id, user.username, user.role);
+    const token = generateToken(user.id, user.username, user.role, user.business_unit);
 
     // Fire-and-forget audit log (do not await to keep login snappy)
     logAudit({
@@ -56,16 +63,23 @@ const login = async (req, res) => {
     });
 
     // Return user data (excluding password)
-    res.json({
+    const response = {
       message: 'Login successful',
       token,
       user: {
         id: user.id,
         username: user.username,
         email: user.email,
-        role: user.role
+        role: user.role,
+        businessUnit: user.business_unit
       }
-    });
+    };
+    
+    console.log('=== LOGIN RESPONSE DEBUG ===');
+    console.log('User from DB:', { id: user.id, username: user.username, role: user.role, business_unit: user.business_unit });
+    console.log('Response user object:', response.user);
+    
+    res.json(response);
 
   } catch (error) {
     console.error('Login error:', error);
@@ -76,15 +90,21 @@ const login = async (req, res) => {
 // Register new user (admin only)
 const register = async (req, res) => {
   try {
-    const { username, email, password, role } = req.body;
+    const { username, email, password, role, businessUnit } = req.body;
 
     // Validate input
-    if (!username || !email || !password) {
+    if (!username || !email || !password || !businessUnit) {
       return res.status(400).json({ message: 'All fields are required' });
     }
 
+    // Validate business unit
+    if (!['NBFI', 'EPC'].includes(businessUnit)) {
+      return res.status(400).json({ message: 'Invalid business unit. Must be NBFI or EPC' });
+    }
+
     // Check if user already exists
-    const [existingUsers] = await db.execute(
+    const pool = getPool();
+    const [existingUsers] = await pool.execute(
       'SELECT id FROM users WHERE username = ? OR email = ?',
       [username, email]
     );
@@ -97,9 +117,9 @@ const register = async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     // Insert new user
-    const [result] = await db.execute(
-      'INSERT INTO users (username, email, password, role) VALUES (?, ?, ?, ?)',
-      [username, email, hashedPassword, role || 'employee']
+    const [result] = await pool.execute(
+      'INSERT INTO users (username, email, password, role, business_unit) VALUES (?, ?, ?, ?, ?)',
+      [username, email, hashedPassword, role || 'employee', businessUnit]
     );
 
     // Fire-and-forget audit log
@@ -111,7 +131,7 @@ const register = async (req, res) => {
       userId: req.userId || null,
       userName: req.username || null,
       ip: getIp(req),
-      details: { email, role: role || 'employee' }
+      details: { email, role: role || 'employee', businessUnit }
     });
 
     res.status(201).json({
@@ -128,8 +148,9 @@ const register = async (req, res) => {
 // Get current user profile
 const getProfile = async (req, res) => {
   try {
-    const [users] = await db.execute(
-      'SELECT id, username, email, role, created_at FROM users WHERE id = ?',
+    const pool = getPool();
+    const [users] = await pool.execute(
+      'SELECT id, username, email, role, business_unit, created_at FROM users WHERE id = ?',
       [req.userId]
     );
 
@@ -137,7 +158,19 @@ const getProfile = async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    res.json({ user: users[0] });
+    const user = users[0];
+    
+    // Convert business_unit to businessUnit for consistency
+    res.json({ 
+      user: {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        role: user.role,
+        businessUnit: user.business_unit,
+        created_at: user.created_at
+      }
+    });
 
   } catch (error) {
     console.error('Get profile error:', error);

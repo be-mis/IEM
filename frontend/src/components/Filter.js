@@ -190,7 +190,7 @@ export default function Filter({ onChange, asForm = false, hideTransaction = fal
               value={category}
               label="Category"
               onChange={handleCategoryChange}
-              disabled={loading || !!error || categoryOptions.length === 0}
+              disabled={loading || !!error || categoryOptions.length === 0 || !chain}
               renderValue={(v) =>
                 v ? categoryOptions.find((o) => o.value === v)?.label : '— Select Category —'
               }
