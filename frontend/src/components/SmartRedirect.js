@@ -24,8 +24,12 @@ export default function SmartRedirect() {
       return '/dashboard/exclusivity-form';
     }
 
-    // NBFI users - show user management if available, otherwise show error
-    // For now, we'll show exclusivity-form and let the Dashboard handle the access message
+    // NBFI users can access nbfi-exclusivity-form
+    if (user.businessUnit === 'NBFI') {
+      return '/dashboard/nbfi-exclusivity-form';
+    }
+
+    // Default fallback
     return '/dashboard/exclusivity-form';
   };
 

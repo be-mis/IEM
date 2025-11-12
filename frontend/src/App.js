@@ -63,6 +63,7 @@ function App() {
                 {/* Nested routes - Dashboard will handle rendering these */}
                 <Route index element={<Navigate to="exclusivity-form" replace />} />
                 <Route path="exclusivity-form" element={<div data-view="exclusivityform" />} />
+                <Route path="nbfi-exclusivity-form" element={<div data-view="nbfiexclusivityform" />} />
                 <Route path="item-maintenance" element={<div data-view="itemmaintenance" />} />
                 <Route path="store-maintenance" element={<div data-view="storemaintenance" />} />
                 <Route path="user-management" element={<div data-view="usermanagement" />} />

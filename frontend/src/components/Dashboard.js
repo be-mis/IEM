@@ -23,6 +23,7 @@ import MuiAlert from '@mui/material/Alert';
 import { useCategories, useChains, useStoreClasses } from '../hooks/useFilter';
 
 import ExclusivityForm from '../components/ExclusivityForm';
+import NBFIExclusivityForm from '../components/NBFIExclusivityForm';
 import ItemMaintenance from '../components/ItemMaintenance';
 import StoreMaintenance from '../components/StoreMaintenance';
 import AuditLogs from '../components/AuditLogs';
@@ -138,8 +139,10 @@ const Dashboard = () => {
   // Sync currentView with URL
   useEffect(() => {
     const path = location.pathname;
-    if (path.includes('exclusivity-form')) {
+    if (path.includes('exclusivity-form') && !path.includes('nbfi')) {
       setCurrentView('exclusivityform');
+    } else if (path.includes('nbfi-exclusivity-form')) {
+      setCurrentView('nbfiexclusivityform');
     } else if (path.includes('item-maintenance')) {
       setCurrentView('itemmaintenance');
     } else if (path.includes('store-maintenance')) {
@@ -149,9 +152,14 @@ const Dashboard = () => {
     } else if (path.includes('audit-logs')) {
       setCurrentView('auditlogs');
     } else {
-      setCurrentView('exclusivityform');
+      // Default based on business unit
+      if (user?.businessUnit === 'NBFI' && user?.role !== 'admin') {
+        setCurrentView('nbfiexclusivityform');
+      } else {
+        setCurrentView('exclusivityform');
+      }
     }
-  }, [location.pathname]);
+  }, [location.pathname, user]);
 
   // Redirect non-EPC users away from EPC-only pages
   useEffect(() => {
@@ -243,6 +251,7 @@ const Dashboard = () => {
   // Update menuItems to include Disposal
   const allMenuItems = [
     { text: 'Exclusivity Form', icon: <DescriptionOutlined />, view: 'exclusivityform', path: '/dashboard/exclusivity-form', epcOnly: true },
+    { text: 'NBFI Exclusivity Form', icon: <DescriptionOutlined />, view: 'nbfiexclusivityform', path: '/dashboard/nbfi-exclusivity-form', nbfiOnly: true },
     { text: 'Item Maintenance', icon: <Inventory2Outlined />, view: 'itemmaintenance', path: '/dashboard/item-maintenance', epcOnly: true },
     { text: 'Store Maintenance', icon: <StoreMallDirectoryOutlined />, view: 'storemaintenance', path: '/dashboard/store-maintenance', epcOnly: true },
     { text: 'User Management', icon: <PeopleIcon />, view: 'usermanagement', adminOnly: true, path: '/dashboard/user-management' },
@@ -258,7 +267,7 @@ const Dashboard = () => {
   const menuItems = allMenuItems.filter(item => {
     // TEMPORARY DEBUG
     console.log('--- Filtering:', item.text);
-    console.log('    adminOnly:', item.adminOnly, ', epcOnly:', item.epcOnly);
+    console.log('    adminOnly:', item.adminOnly, ', epcOnly:', item.epcOnly, ', nbfiOnly:', item.nbfiOnly);
     console.log('    user.role:', user?.role, ', user.businessUnit:', user?.businessUnit);
     
     // If item is admin only, check if user is admin
@@ -271,6 +280,12 @@ const Dashboard = () => {
     if (item.epcOnly) {
       const result = user?.role === 'admin' || user?.businessUnit === 'EPC';
       console.log('    EPC check result:', result, '(admin:', user?.role === 'admin', 'isEPC:', user?.businessUnit === 'EPC', ')');
+      return result;
+    }
+    // If item is NBFI only, check if user is admin OR has NBFI business unit
+    if (item.nbfiOnly) {
+      const result = user?.role === 'admin' || user?.businessUnit === 'NBFI';
+      console.log('    NBFI check result:', result, '(admin:', user?.role === 'admin', 'isNBFI:', user?.businessUnit === 'NBFI', ')');
       return result;
     }
     console.log('    Default: true');
@@ -426,6 +441,16 @@ const Dashboard = () => {
         }
         return <AuditLogs />;
       
+      case 'nbfiexclusivityform':
+        if (user?.role !== 'admin' && user?.businessUnit !== 'NBFI') {
+          return (
+            <MuiAlert severity="warning">
+              You don't have permission to access NBFI Exclusivity Form. NBFI business unit access required.
+            </MuiAlert>
+          );
+        }
+        return <NBFIExclusivityForm />;
+      
       case 'exclusivityform':
       default:
         if (!hasEpcAccess) {
@@ -522,6 +547,7 @@ const Dashboard = () => {
               </IconButton>
               <Typography variant="h6" sx={{ flexGrow: 1, fontWeight: '700' }}>
                 {currentView === 'exclusivityform' ? 'Exclusivity Form' :
+                 currentView === 'nbfiexclusivityform' ? 'NBFI Exclusivity Form' :
                  currentView === 'itemmaintenance' ? 'Item Maintenance' :
                  currentView === 'storemaintenance' ? 'Store Maintenance' :
                  currentView === 'usermanagement' ? 'User Management' :
