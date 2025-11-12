@@ -49,8 +49,8 @@ router.get('/chains', async (req, res) => {
         return res.status(500).json({ error: 'Failed to fetch chains' });
       }
     }
-    // Fallback: derive distinct chain codes from branches
-    const [rows2] = await pool.execute('SELECT DISTINCT chainCode FROM epc_branches ORDER BY chainCode ASC');
+    // Fallback: derive distinct chain codes from stores
+    const [rows2] = await pool.execute('SELECT DISTINCT chainCode FROM epc_stores ORDER BY chainCode ASC');
     res.json({ items: rows2.map(r => ({ id: null, chainCode: r.chainCode, chainName: r.chainCode })) });
   } catch (err) {
     console.error('GET /filters/chains error:', err);
@@ -87,14 +87,14 @@ router.get('/branches', async (req, res) => {
 
     const pool = getPool();
     const query = `
-      SELECT branchCode, branchName
-      FROM epc_branches
+      SELECT storeCode, storeName
+      FROM epc_stores
       WHERE chainCode = ? AND ${columnName} = ?
-      ORDER BY branchCode ASC
+      ORDER BY storeCode ASC
     `;
     const [rows] = await pool.execute(query, [chain, storeClass]);
 
-    res.json({ items: rows.map(r => ({ branchCode: r.branchCode, branchName: r.branchName })) });
+    res.json({ items: rows.map(r => ({ branchCode: r.storeCode, branchName: r.storeName })) });
   } catch (err) {
     console.error('GET /filters/branches error:', err);
     res.status(500).json({ error: 'Failed to fetch branches' });
@@ -323,7 +323,7 @@ router.get('/available-branches', async (req, res) => {
     const categoryLower = String(category).trim().toLowerCase();
     const storeClassValue = String(storeClass).trim();
 
-    // Validate category and get the column name for epc_branches table
+    // Validate category and get the column name for epc_stores table
     const validColumns = {
       'lamps': 'lampsClass',
       'decors': 'decorsClass',
@@ -362,23 +362,23 @@ router.get('/available-branches', async (req, res) => {
 
     const pool = getPool();
     
-    // Get all branches from epc_branches where:
+    // Get all stores from epc_stores where:
     // 1. chainCode matches the selected chain (e.g., 'vChain')
     // 2. The category column (e.g., lampsClass) is NULL, 'NA', or NOT equal to storeClass
     const query = `
-      SELECT b.branchCode, b.branchName, b.chainCode, b.${categoryColumn}
-      FROM epc_branches b
+      SELECT b.storeCode, b.storeName, b.chainCode, b.${categoryColumn}
+      FROM epc_stores b
       WHERE b.chainCode = ? 
         AND (b.${categoryColumn} IS NULL OR b.${categoryColumn} = 'NA' OR b.${categoryColumn} != ?)
-      ORDER BY b.branchCode ASC
+      ORDER BY b.storeCode ASC
     `;
 
     const [rows] = await pool.execute(query, [chainValue, storeClassValue]);
     
     res.json({
       items: rows.map(r => ({
-        branchCode: r.branchCode,
-        branchName: r.branchName,
+        branchCode: r.storeCode,
+        branchName: r.storeName,
         chainCode: r.chainCode,
         storeClass: r[categoryColumn]
       }))

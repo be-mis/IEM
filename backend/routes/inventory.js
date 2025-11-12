@@ -868,7 +868,7 @@ router.post('/remove-exclusivity-branches', verifyToken, async (req, res) => {
       SELECT COLUMN_NAME 
       FROM INFORMATION_SCHEMA.COLUMNS 
       WHERE TABLE_SCHEMA = DATABASE() 
-        AND TABLE_NAME = 'epc_branches'
+        AND TABLE_NAME = 'epc_stores'
         AND COLUMN_NAME LIKE '%Class'
         AND COLUMN_NAME NOT IN ('chainCode', 'created_at', 'updated_at')
     `);
@@ -898,11 +898,11 @@ router.post('/remove-exclusivity-branches', verifyToken, async (req, res) => {
 
     for (const branchCode of branchCodes) {
       try {
-        // Update the branch's category column to NULL to remove exclusivity
+        // Update the store's category column to NULL to remove exclusivity
         const updateQuery = `
-          UPDATE epc_branches 
+          UPDATE epc_stores 
           SET ${categoryColumn} = NULL, updated_at = CURRENT_TIMESTAMP
-          WHERE branchCode = ?
+          WHERE storeCode = ?
         `;
         
         const [result] = await pool.execute(updateQuery, [branchCode]);
@@ -986,7 +986,7 @@ router.post('/add-exclusivity-branches', verifyToken, async (req, res) => {
       SELECT COLUMN_NAME 
       FROM INFORMATION_SCHEMA.COLUMNS 
       WHERE TABLE_SCHEMA = DATABASE() 
-        AND TABLE_NAME = 'epc_branches'
+        AND TABLE_NAME = 'epc_stores'
         AND COLUMN_NAME LIKE '%Class'
         AND COLUMN_NAME NOT IN ('chainCode', 'created_at', 'updated_at')
     `);
@@ -1032,11 +1032,11 @@ router.post('/add-exclusivity-branches', verifyToken, async (req, res) => {
           continue;
         }
 
-        // Update the branch's category column with the store classification
+        // Update the store's category column with the store classification
         const updateQuery = `
-          UPDATE epc_branches 
+          UPDATE epc_stores 
           SET ${categoryColumn} = ?, updated_at = CURRENT_TIMESTAMP
-          WHERE branchCode = ?
+          WHERE storeCode = ?
         `;
         
         const [result] = await pool.execute(updateQuery, [storeClass, branchCode]);
@@ -1259,38 +1259,38 @@ router.post('/mass-upload-exclusivity-branches', verifyToken, upload.single('fil
         continue;
       }
 
-      // Check if the branch exists in the database using branchCode
-      const [branchCheck] = await pool.query(
-        'SELECT branchCode, branchName FROM epc_branches WHERE branchCode = ?',
+      // Check if the store exists in the database using storeCode
+      const [storeCheck] = await pool.query(
+        'SELECT storeCode, storeName FROM epc_stores WHERE storeCode = ?',
         [branchCode]
       );
 
-      const storeExists = branchCheck.length > 0;
-      const actualBranchName = storeExists ? branchCheck[0].branchName : branchName;
+      const storeExists = storeCheck.length > 0;
+      const actualStoreName = storeExists ? storeCheck[0].storeName : branchName;
 
       // Insert or Update the branch with chain and category classifications
       try {
         if (storeExists) {
           // Update existing store
           await pool.query(
-            `UPDATE epc_branches 
+            `UPDATE epc_stores 
              SET chainCode = ?, lampsClass = ?, decorsClass = ?, clocksClass = ?, stationeryClass = ?, framesClass = ?
-             WHERE branchCode = ?`,
+             WHERE storeCode = ?`,
             [chainCode, lampsClassCode, decorsClassCode, clocksClassCode, stationeryClassCode, framesClassCode, branchCode]
           );
         } else {
           // Insert new store
           await pool.query(
-            `INSERT INTO epc_branches (branchCode, branchName, chainCode, lampsClass, decorsClass, clocksClass, stationeryClass, framesClass)
+            `INSERT INTO epc_stores (storeCode, storeName, chainCode, lampsClass, decorsClass, clocksClass, stationeryClass, framesClass)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-            [branchCode, actualBranchName, chainCode, lampsClassCode, decorsClassCode, clocksClassCode, stationeryClassCode, framesClassCode]
+            [branchCode, actualStoreName, chainCode, lampsClassCode, decorsClassCode, clocksClassCode, stationeryClassCode, framesClassCode]
           );
         }
 
         results.success.push({
           row: rowNum,
           branchCode: branchCode,
-          branchName: actualBranchName,
+          branchName: actualStoreName,
           chain: chainName,
           lampsClass: lampsClass || 'N/A',
           decorsClass: decorsClass || 'N/A',
