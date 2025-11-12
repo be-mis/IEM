@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box, Paper, TextField, Button, Typography, Link, Alert,
   InputAdornment, IconButton, Container, CircularProgress,
@@ -28,6 +28,19 @@ export default function SignUp() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+
+  // Auto-set Business Unit based on email domain
+  useEffect(() => {
+    if (formData.email) {
+      const emailLower = formData.email.toLowerCase();
+      
+      if (emailLower.endsWith('@barbizonfashion.com')) {
+        setFormData(prev => ({ ...prev, businessUnit: 'NBFI' }));
+      } else if (emailLower.endsWith('@everydayproductscorp.com') || emailLower.endsWith('@everydayproductscorp.net')) {
+        setFormData(prev => ({ ...prev, businessUnit: 'EPC' }));
+      }
+    }
+  }, [formData.email]);
 
   const handleChange = (field) => (event) => {
     setFormData(prev => ({
@@ -232,9 +245,15 @@ export default function SignUp() {
                 <MenuItem value="">
                   <em>Select Business Unit</em>
                 </MenuItem>
-                <MenuItem value="NBFI">NBFI</MenuItem>
-                <MenuItem value="EPC">EPC</MenuItem>
+                <MenuItem value="NBFI">NBFI (Barbizon Fashion)</MenuItem>
+                <MenuItem value="EPC">EPC (Everyday Products Corp)</MenuItem>
               </Select>
+              {formData.businessUnit && formData.email && (
+                <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, ml: 1.5 }}>
+                  {formData.email.toLowerCase().endsWith('@barbizonfashion.com') && '✓ Auto-detected from email domain'}
+                  {(formData.email.toLowerCase().endsWith('@everydayproductscorp.com') || formData.email.toLowerCase().endsWith('@everydayproductscorp.net')) && '✓ Auto-detected from email domain'}
+                </Typography>
+              )}
             </FormControl>
 
             <TextField
@@ -307,7 +326,6 @@ export default function SignUp() {
                 disabled={loading || success}
               >
                 <MenuItem value="employee">Employee</MenuItem>
-                <MenuItem value="admin">Admin</MenuItem>
                 <MenuItem value="manager">Manager</MenuItem>
               </Select>
             </FormControl>

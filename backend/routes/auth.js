@@ -122,10 +122,15 @@ router.post('/login', async (req, res) => {
 // POST /api/auth/register (optional - for creating new users)
 router.post('/register', async (req, res) => {
   try {
-    const { username, email, password, role } = req.body;
+    const { username, email, password, role, businessUnit } = req.body;
     
-    if (!username || !email || !password) {
-      return res.status(400).json({ message: 'Username, email, and password are required' });
+    if (!username || !email || !password || !businessUnit) {
+      return res.status(400).json({ message: 'Username, email, password, and business unit are required' });
+    }
+    
+    // Validate business unit
+    if (!['NBFI', 'EPC'].includes(businessUnit)) {
+      return res.status(400).json({ message: 'Invalid business unit. Must be NBFI or EPC' });
     }
     
     const pool = getPool();
@@ -143,9 +148,9 @@ router.post('/register', async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
     
     const [result] = await pool.execute(`
-      INSERT INTO users (username, email, password, role, is_active)
-      VALUES (?, ?, ?, ?, TRUE)
-    `, [username, email, hashedPassword, role || 'employee']);
+      INSERT INTO users (username, email, password, role, business_unit, is_active)
+      VALUES (?, ?, ?, ?, ?, TRUE)
+    `, [username, email, hashedPassword, role || 'employee', businessUnit]);
     
     // Log user registration
     try {
@@ -160,7 +165,8 @@ router.post('/register', async (req, res) => {
         ip: getIp(req),
         details: { 
           email,
-          role: role || 'employee'
+          role: role || 'employee',
+          businessUnit
         }
       });
     } catch (auditError) {
@@ -375,7 +381,7 @@ router.get('/users', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const pool = getPool();
     const [users] = await pool.execute(
-      'SELECT id, username, email, role, is_active, created_at, updated_at FROM users ORDER BY created_at DESC'
+      'SELECT id, username, email, role, business_unit as businessUnit, is_active, created_at, updated_at FROM users ORDER BY created_at DESC'
     );
     
     res.json({ users });
@@ -388,10 +394,15 @@ router.get('/users', authenticateToken, requireAdmin, async (req, res) => {
 // POST /api/auth/users - Create new user (admin only)
 router.post('/users', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    const { username, email, password, role, is_active } = req.body;
+    const { username, email, password, role, businessUnit, is_active } = req.body;
     
-    if (!username || !email || !password) {
-      return res.status(400).json({ message: 'Username, email, and password are required' });
+    if (!username || !email || !password || !businessUnit) {
+      return res.status(400).json({ message: 'Username, email, password, and business unit are required' });
+    }
+    
+    // Validate business unit
+    if (!['NBFI', 'EPC'].includes(businessUnit)) {
+      return res.status(400).json({ message: 'Invalid business unit. Must be NBFI or EPC' });
     }
     
     const pool = getPool();
@@ -409,8 +420,8 @@ router.post('/users', authenticateToken, requireAdmin, async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
     
     const [result] = await pool.execute(
-      'INSERT INTO users (username, email, password, role, is_active) VALUES (?, ?, ?, ?, ?)',
-      [username, email, hashedPassword, role || 'employee', is_active !== false]
+      'INSERT INTO users (username, email, password, role, business_unit, is_active) VALUES (?, ?, ?, ?, ?, ?)',
+      [username, email, hashedPassword, role || 'employee', businessUnit, is_active !== false]
     );
     
     // Log user creation
@@ -424,7 +435,7 @@ router.post('/users', authenticateToken, requireAdmin, async (req, res) => {
         userName: req.user.username,
         userEmail: req.user?.email || req.email || user?.email || null,
         ip: getIp(req),
-        details: { email, role: role || 'employee', createdBy: req.user.username }
+        details: { email, role: role || 'employee', businessUnit, createdBy: req.user.username }
       });
     } catch (auditError) {
       console.error('Error logging user creation audit:', auditError);
@@ -444,7 +455,7 @@ router.post('/users', authenticateToken, requireAdmin, async (req, res) => {
 router.put('/users/:id', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
-    const { email, password, role, is_active } = req.body;
+    const { email, password, role, businessUnit, is_active } = req.body;
     
     const pool = getPool();
     
@@ -480,6 +491,15 @@ router.put('/users/:id', authenticateToken, requireAdmin, async (req, res) => {
     if (role) {
       updates.push('role = ?');
       values.push(role);
+    }
+    
+    if (businessUnit) {
+      // Validate business unit
+      if (!['NBFI', 'EPC'].includes(businessUnit)) {
+        return res.status(400).json({ message: 'Invalid business unit. Must be NBFI or EPC' });
+      }
+      updates.push('business_unit = ?');
+      values.push(businessUnit);
     }
     
     if (is_active !== undefined) {

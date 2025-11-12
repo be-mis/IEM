@@ -37,6 +37,7 @@ export default function UserMaintenance() {
     email: '',
     password: '',
     role: 'employee',
+    businessUnit: '',
     is_active: true
   });
   const [showPassword, setShowPassword] = useState(false);
@@ -110,6 +111,7 @@ export default function UserMaintenance() {
       email: '',
       password: '',
       role: 'employee',
+      businessUnit: '',
       is_active: true
     });
     setSelectedUser(null);
@@ -124,6 +126,7 @@ export default function UserMaintenance() {
       email: user.email,
       password: '', // Don't populate password for edit
       role: user.role,
+      businessUnit: user.businessUnit || user.business_unit || '',
       is_active: Boolean(user.is_active)
     });
     setSelectedUser(user);
@@ -138,6 +141,7 @@ export default function UserMaintenance() {
       email: '',
       password: '',
       role: 'employee',
+      businessUnit: '',
       is_active: true
     });
     setSelectedUser(null);
@@ -160,10 +164,10 @@ export default function UserMaintenance() {
 
       if (dialogMode === 'add') {
         // Add new user
-        if (!formData.username || !formData.email || !formData.password) {
+        if (!formData.username || !formData.email || !formData.password || !formData.businessUnit) {
           setSnackbar({
             open: true,
-            message: 'Please fill in all required fields',
+            message: 'Please fill in all required fields including business unit',
             severity: 'error'
           });
           return;
@@ -185,6 +189,7 @@ export default function UserMaintenance() {
         const updateData = {
           email: formData.email,
           role: formData.role,
+          businessUnit: formData.businessUnit,
           is_active: formData.is_active
         };
         
@@ -360,6 +365,7 @@ export default function UserMaintenance() {
                   <TableCell><strong>Username</strong></TableCell>
                   <TableCell><strong>Email</strong></TableCell>
                   <TableCell><strong>Role</strong></TableCell>
+                  <TableCell><strong>Business Unit</strong></TableCell>
                   <TableCell><strong>Status</strong></TableCell>
                   <TableCell><strong>Created At</strong></TableCell>
                   <TableCell align="center"><strong>Actions</strong></TableCell>
@@ -368,7 +374,7 @@ export default function UserMaintenance() {
               <TableBody>
                 {paginatedUsers.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} align="center" sx={{ py: 4 }}>
+                    <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
                       {search ? `No users found matching "${search}"` : 'No users found'}
                     </TableCell>
                   </TableRow>
@@ -382,6 +388,14 @@ export default function UserMaintenance() {
                           label={user.role}
                           size="small"
                           color={getRoleColor(user.role)}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          label={user.businessUnit || user.business_unit || 'N/A'}
+                          size="small"
+                          color={user.businessUnit === 'EPC' || user.business_unit === 'EPC' ? 'primary' : 'secondary'}
+                          variant="outlined"
                         />
                       </TableCell>
                       <TableCell>
@@ -522,6 +536,20 @@ export default function UserMaintenance() {
                     <MenuItem value="employee">Employee</MenuItem>
                     <MenuItem value="manager">Manager</MenuItem>
                     <MenuItem value="admin">Admin</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12}>
+                <FormControl fullWidth required>
+                  <InputLabel>Business Unit</InputLabel>
+                  <Select
+                    value={formData.businessUnit}
+                    label="Business Unit"
+                    onChange={handleFormChange('businessUnit')}
+                  >
+                    <MenuItem value=""><em>Select Business Unit</em></MenuItem>
+                    <MenuItem value="NBFI">NBFI</MenuItem>
+                    <MenuItem value="EPC">EPC</MenuItem>
                   </Select>
                 </FormControl>
               </Grid>
