@@ -18,6 +18,57 @@ export const AuthProvider = ({ children }) => {
   const [token, setToken] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // Auto-logout after 20 minutes of inactivity
+  useEffect(() => {
+    let inactivityTimer;
+    const INACTIVITY_TIMEOUT = 20 * 60 * 1000; // 20 minutes in milliseconds
+
+    const resetInactivityTimer = () => {
+      // Clear existing timer
+      if (inactivityTimer) {
+        clearTimeout(inactivityTimer);
+      }
+
+      // Only set timer if user is logged in
+      if (user && token) {
+        inactivityTimer = setTimeout(() => {
+          console.log('User logged out due to inactivity (30 minutes)');
+          logout();
+          // Optionally show a message to the user
+          alert('You have been logged out due to inactivity.');
+          window.location.href = '/login';
+        }, INACTIVITY_TIMEOUT);
+      }
+    };
+
+    // Events that indicate user activity
+    const activityEvents = ['mousedown', 'keydown', 'scroll', 'touchstart', 'click', 'mousemove'];
+
+    // Attach event listeners to reset timer on user activity
+    const handleActivity = () => {
+      resetInactivityTimer();
+    };
+
+    if (user && token) {
+      activityEvents.forEach(event => {
+        window.addEventListener(event, handleActivity);
+      });
+
+      // Initialize timer
+      resetInactivityTimer();
+    }
+
+    // Cleanup function
+    return () => {
+      if (inactivityTimer) {
+        clearTimeout(inactivityTimer);
+      }
+      activityEvents.forEach(event => {
+        window.removeEventListener(event, handleActivity);
+      });
+    };
+  }, [user, token]);
+
   useEffect(() => {
     // Check if user is already logged in
     const storedToken = localStorage.getItem('token');
