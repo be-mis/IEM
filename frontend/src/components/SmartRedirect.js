@@ -14,23 +14,9 @@ export default function SmartRedirect() {
       return '/login';
     }
 
-    // Admin can access everything, default to exclusivity-form
-    if (user.role === 'admin') {
-      return '/dashboard/exclusivity-form';
-    }
-
-    // EPC users can access exclusivity-form, item-maintenance, store-maintenance
-    if (user.businessUnit === 'EPC') {
-      return '/dashboard/exclusivity-form';
-    }
-
-    // NBFI users can access nbfi-exclusivity-form
-    if (user.businessUnit === 'NBFI') {
-      return '/dashboard/nbfi-exclusivity-form';
-    }
-
-    // Default fallback
-    return '/dashboard/exclusivity-form';
+    // All authenticated users default to exclusivity-form
+    // Dashboard will conditionally render EPC or NBFI form based on business unit
+    return '/exclusivity-form';
   };
 
   return <Navigate to={getDefaultRoute()} replace />;

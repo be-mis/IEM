@@ -389,4 +389,294 @@ router.get('/available-branches', async (req, res) => {
   }
 });
 
+// ============================================================================
+// NBFI-SPECIFIC ENDPOINTS
+// ============================================================================
+
+// GET /api/filters/nbfi/categories (or brands)
+router.get('/nbfi/categories', async (req, res) => {
+  try {
+    const pool = getPool();
+    // Try nbfi_categories first, fallback to nbfi_brands
+    let rows;
+    try {
+      [rows] = await pool.execute(
+        'SELECT id, catCode, category FROM nbfi_categories ORDER BY category ASC'
+      );
+    } catch (err) {
+      // If nbfi_categories doesn't exist, try nbfi_brands
+      if (err.code === 'ER_NO_SUCH_TABLE') {
+        [rows] = await pool.execute(
+          'SELECT id, brandCode AS catCode, brand AS category FROM nbfi_brands ORDER BY brand ASC'
+        );
+      } else {
+        throw err;
+      }
+    }
+    res.json({ items: rows.map(r => ({ id: r.id, catCode: r.catCode, category: r.category })) });
+  } catch (err) {
+    console.error('GET /filters/nbfi/categories error:', err);
+    res.status(500).json({ error: 'Failed to fetch NBFI categories' });
+  }
+});
+
+// GET /api/filters/nbfi/store-classes
+router.get('/nbfi/store-classes', async (req, res) => {
+  try {
+    const pool = getPool();
+    const [rows] = await pool.execute(
+      'SELECT id, storeClassCode, storeClassification FROM nbfi_store_class ORDER BY storeClassification ASC'
+    );
+    res.json({ items: rows.map(r => ({ id: r.id, storeClassCode: r.storeClassCode, storeClassification: r.storeClassification })) });
+  } catch (err) {
+    console.error('GET /filters/nbfi/store-classes error:', err);
+    res.status(500).json({ error: 'Failed to fetch NBFI store classes' });
+  }
+});
+
+// GET /api/filters/nbfi/chains
+router.get('/nbfi/chains', async (req, res) => {
+  try {
+    const pool = getPool();
+    try {
+      const [rows] = await pool.execute('SELECT id, chainCode, chainName FROM nbfi_chains ORDER BY chainName ASC');
+      if (rows && rows.length > 0) {
+        return res.json({ items: rows.map(r => ({ id: r.id, chainCode: r.chainCode, chainName: r.chainName })) });
+      }
+    } catch (err) {
+      // If table not found, fall through to derive from stores
+      if (!err || err.code !== 'ER_NO_SUCH_TABLE') {
+        console.error('GET /filters/nbfi/chains (chains table) error:', err);
+        return res.status(500).json({ error: 'Failed to fetch NBFI chains' });
+      }
+    }
+    // Fallback: derive distinct chain codes from nbfi_stores
+    const [rows2] = await pool.execute('SELECT DISTINCT chainCode FROM nbfi_stores ORDER BY chainCode ASC');
+    res.json({ items: rows2.map(r => ({ id: null, chainCode: r.chainCode, chainName: r.chainCode })) });
+  } catch (err) {
+    console.error('GET /filters/nbfi/chains error:', err);
+    res.status(500).json({ error: 'Failed to fetch NBFI chains' });
+  }
+});
+
+// GET /api/filters/nbfi/branches (stores)
+router.get('/nbfi/branches', async (req, res) => {
+  try {
+    let { chain, storeClass, category } = req.query;
+    if (!chain || !storeClass || !category) {
+      return res.status(400).json({ error: 'Missing required parameters: chain, storeClass, and category are required' });
+    }
+
+    chain = String(chain).trim();
+    storeClass = String(storeClass).trim();
+    category = String(category).trim().toUpperCase();
+
+    console.log('GET /filters/nbfi/branches', { chain, storeClass, category });
+
+    // Build brand column name from category (brand code)
+    const sanitize = (s) => String(s || '').trim().replace(/\s+/g, '_').replace(/[^A-Za-z0-9_]/g, '').toLowerCase();
+    const brandCol = `brand_${sanitize(category)}`;
+
+    const pool = getPool();
+
+    // Ensure column exists
+    const [colCheck] = await pool.execute(`SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'nbfi_store_exclusivity_list' AND COLUMN_NAME = ?`, [brandCol]);
+    if (!Array.isArray(colCheck) || colCheck.length === 0) {
+      return res.status(400).json({ error: `Invalid brand '${category}' or brand column not found in nbfi_store_exclusivity_list` });
+    }
+
+    // Join nbfi_stores with nbfi_store_exclusivity_list to filter by chain, brand column and store classification
+    const query = `
+      SELECT DISTINCT s.storeCode, s.storeName, s.chainCode, e.storeClassification
+      FROM nbfi_stores s
+      INNER JOIN nbfi_store_exclusivity_list e ON s.storeCode = e.storeCode
+      WHERE s.chainCode = ?
+        AND e.\`${brandCol}\` = 1
+        AND e.storeClassification = ?
+      ORDER BY s.storeCode ASC
+    `;
+
+    const [rows] = await pool.execute(query, [chain, storeClass]);
+
+    // Get excluded items for each branch from nbfi_item_exclusivity_list
+    // The exclusivity list now contains per-item flags for store types: SM, RDS, WDS.
+    const allowedTypes = ['SM', 'RDS', 'WDS'];
+    const branchesWithExclusions = await Promise.all(rows.map(async (branch) => {
+      // Determine store type column to check. Prefer storeClassification (from exclusivity_list join),
+      // fall back to categoryClass or derive from storeName if necessary.
+      let storeType = (branch.storeClassification || branch.categoryClass || '') + '';
+      storeType = String(storeType).trim().toUpperCase();
+      if (!allowedTypes.includes(storeType)) {
+        // fallback heuristic: prefer 'SM' as default
+        storeType = 'SM';
+      }
+
+      // Ensure column exists in nbfi_item_exclusivity_list
+      const [colCheck] = await pool.execute(
+        `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'nbfi_item_exclusivity_list' AND COLUMN_NAME = ?`,
+        [storeType]
+      );
+      if (!Array.isArray(colCheck) || colCheck.length === 0) {
+        // If column missing, return empty exclusions for this branch (safe fallback)
+        return {
+          branchCode: branch.storeCode,
+          branchName: branch.storeName,
+          excludedItemIds: []
+        };
+      }
+
+      const query = `SELECT itemCode FROM nbfi_item_exclusivity_list WHERE \`${storeType}\` = 1`;
+      const [exclusions] = await pool.execute(query);
+
+      return {
+        branchCode: branch.storeCode,
+        branchName: branch.storeName,
+        excludedItemIds: Array.isArray(exclusions) ? exclusions.map(e => e.itemCode).filter(Boolean) : []
+      };
+    }));
+
+    res.json({ items: branchesWithExclusions });
+  } catch (err) {
+    console.error('GET /filters/nbfi/branches error:', err);
+    res.status(500).json({ error: 'Failed to fetch NBFI branches' });
+  }
+});
+
+// GET /api/filters/nbfi/items
+router.get('/nbfi/items', async (req, res) => {
+  try {
+    let { category } = req.query;
+    if (!category) {
+      return res.status(400).json({ error: 'Missing required parameter: category' });
+    }
+
+    category = String(category).trim();
+
+    console.log('GET /filters/nbfi/items', { category });
+
+    const pool = getPool();
+    const query = `
+      SELECT itemCode, itemDescription
+      FROM nbfi_item_list
+      WHERE LOWER(itemCategory) = LOWER(?)
+      ORDER BY itemCode ASC
+    `;
+    const [rows] = await pool.execute(query, [category]);
+
+    res.json({ items: rows.map(r => ({ itemCode: r.itemCode, itemDescription: r.itemDescription })) });
+  } catch (err) {
+    console.error('GET /filters/nbfi/items error:', err);
+    res.status(500).json({ error: 'Failed to fetch NBFI items' });
+  }
+});
+
+// GET /api/filters/nbfi/items-for-assignment
+router.get('/nbfi/items-for-assignment', async (req, res) => {
+  try {
+    let { chain, storeClass, category } = req.query;
+    if (!chain || !storeClass || !category) {
+      return res.status(400).json({ error: 'Missing required parameters: chain, storeClass, and category are required' });
+    }
+
+    chain = String(chain).trim();
+    storeClass = String(storeClass).trim();
+    category = String(category).trim();
+
+    const columnName = `${chain}${storeClass}`;
+    const categoryLower = category.toLowerCase();
+
+    console.log(`\n================================`);
+    console.log(`GET /filters/nbfi/items-for-assignment`);
+    console.log(`Chain: ${chain}, StoreClass: ${storeClass}, Category: ${category}`);
+    console.log(`Column name: ${columnName}`);
+    console.log(`================================\n`);
+
+    const pool = getPool();
+
+    // Get total items in category
+    const [totalItems] = await pool.execute(
+      `SELECT DISTINCT itemCode, itemDescription FROM nbfi_item_list WHERE LOWER(itemCategory) = ?`,
+      [categoryLower]
+    );
+    console.log(`Total DISTINCT items in nbfi_item_list for category '${categoryLower}': ${totalItems.length}`);
+
+    // Get available items (not assigned to this combination)
+    const query = `
+      SELECT DISTINCT i.itemCode, i.itemDescription, i.itemCategory, e.${columnName} as columnValue, e.itemCode as existsInExclusivity
+      FROM nbfi_item_list i
+      LEFT JOIN nbfi_store_exclusivity_list e ON i.itemCode = e.itemCode
+      WHERE LOWER(i.itemCategory) = ? 
+        AND (e.itemCode IS NULL OR e.${columnName} IS NULL OR e.${columnName} != 1)
+      ORDER BY i.itemCode ASC
+    `;
+
+    const [rows] = await pool.execute(query, [categoryLower]);
+    
+    console.log(`Available items returned: ${rows.length}`);
+    console.log(`================================\n`);
+    
+    const response = {
+      items: rows.map(r => ({
+        itemCode: r.itemCode,
+        itemDescription: r.itemDescription,
+        itemCategory: r.itemCategory
+      }))
+    };
+
+    res.json(response);
+  } catch (err) {
+    console.error('GET /filters/nbfi/items-for-assignment error:', err);
+    res.status(500).json({ error: 'Failed to fetch NBFI items for assignment' });
+  }
+});
+
+// GET /api/filters/nbfi/available-branches
+router.get('/nbfi/available-branches', async (req, res) => {
+  try {
+    let { chain, category } = req.query;
+    if (!chain || !category) {
+      return res.status(400).json({ error: 'Missing required parameters: chain and category are required' });
+    }
+
+    chain = String(chain).trim();
+    category = String(category).trim().toLowerCase();
+
+    const validColumns = {
+      'lamps': 'lampsClass',
+      'decors': 'decorsClass',
+      'clocks': 'clocksClass',
+      'stationery': 'stationeryClass',
+      'frames': 'framesClass'
+    };
+
+    const categoryColumn = validColumns[category];
+    if (!categoryColumn) {
+      return res.status(400).json({ error: `Invalid category. Must be one of: ${Object.keys(validColumns).join(', ')}` });
+    }
+
+    console.log('GET /filters/nbfi/available-branches', { chain, category });
+
+    const pool = getPool();
+    const query = `
+      SELECT storeCode, storeName, chainCode, ${categoryColumn} as storeClass
+      FROM nbfi_stores
+      WHERE chainCode = ? AND ${categoryColumn} IS NOT NULL AND ${categoryColumn} != ''
+      ORDER BY storeCode ASC
+    `;
+    const [rows] = await pool.execute(query, [chain]);
+
+    res.json({
+      items: rows.map(r => ({
+        branchCode: r.storeCode,
+        branchName: r.storeName,
+        chainCode: r.chainCode,
+        storeClass: r.storeClass
+      }))
+    });
+  } catch (err) {
+    console.error('GET /filters/nbfi/available-branches error:', err);
+    res.status(500).json({ error: 'Failed to fetch NBFI available branches' });
+  }
+});
+
 module.exports = router;

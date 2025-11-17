@@ -2,21 +2,44 @@
 import React, { useMemo, useState, useEffect, useCallback } from 'react';
 import { Box, Grid, FormControl, InputLabel, Select, MenuItem } from '@mui/material';
 import { useChains, useCategories, useStoreClasses } from '../hooks/useFilter';
+import { useNBFIChains, useNBFICategories, useNBFIStoreClasses } from '../hooks/useNBFIFilter';
 
 const TRANSACTION_OPTIONS = ['Repeat Order', 'New Item'];
 
-export default function Filter({ onChange, asForm = false, hideTransaction = false }) {
+export default function Filter({ onChange, asForm = false, hideTransaction = false, categoryLabel = 'Category', isNBFI = false }) {
   const [chain, setChain] = useState('');
   const [category, setCategory] = useState('');
   const [storeClass, setStoreClass] = useState('');
   const [transaction, setTransaction] = useState('');
 
-  const { categories, loading: catLoading, error: catError } = useCategories();
-  const { chains, loading: chLoading, error: chError } = useChains();
-  const { storeClasses, loading: scLoading, error: scError } = useStoreClasses();
+  // Call all hooks unconditionally (React rules)
+  const epcCategories = useCategories();
+  const epcChains = useChains();
+  const epcStoreClasses = useStoreClasses();
+  const nbfiCategories = useNBFICategories();
+  const nbfiChains = useNBFIChains();
+  const nbfiStoreClasses = useNBFIStoreClasses();
+
+  // Use NBFI data or EPC data based on isNBFI prop
+  const { categories, loading: catLoading, error: catError } = isNBFI ? nbfiCategories : epcCategories;
+  const { chains, loading: chLoading, error: chError } = isNBFI ? nbfiChains : epcChains;
+  const { storeClasses, loading: scLoading, error: scError } = isNBFI ? nbfiStoreClasses : epcStoreClasses;
 
   const loading = chLoading || catLoading || scLoading;
   const error = chError || catError || scError;
+
+  // Debug logging
+  useEffect(() => {
+    if (isNBFI) {
+      console.log('NBFI Filter Data:', {
+        chains: chains,
+        categories: categories,
+        storeClasses: storeClasses,
+        loading: { chLoading, catLoading, scLoading },
+        errors: { chError, catError, scError }
+      });
+    }
+  }, [isNBFI, chains, categories, storeClasses, chLoading, catLoading, scLoading, chError, catError, scError]);
 
   const chainOptions = useMemo(() => {
     const arr = Array.isArray(chains) ? chains : [];
@@ -184,18 +207,18 @@ export default function Filter({ onChange, asForm = false, hideTransaction = fal
 
         <Grid item xs={12} md={hideTransaction ? 4 : 3}>
           <FormControl size="small" fullWidth>
-            <InputLabel id="filter-category">Category</InputLabel>
+            <InputLabel id="filter-category">{categoryLabel}</InputLabel>
             <Select
               labelId="filter-category"
               value={category}
-              label="Category"
+              label={categoryLabel}
               onChange={handleCategoryChange}
               disabled={loading || !!error || categoryOptions.length === 0 || !chain}
               renderValue={(v) =>
-                v ? categoryOptions.find((o) => o.value === v)?.label : '— Select Category —'
+                v ? categoryOptions.find((o) => o.value === v)?.label : `— Select ${categoryLabel} —`
               }
             >
-              <PlaceholderItem text="— Select Category —" />
+              <PlaceholderItem text={`— Select ${categoryLabel} —`} />
               {loading && <MenuItem disabled>Loading…</MenuItem>}
               {!loading && error && <MenuItem disabled>{String(error)}</MenuItem>}
               {!loading &&

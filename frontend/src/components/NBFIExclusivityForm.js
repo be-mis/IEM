@@ -12,11 +12,11 @@ import {
 } from '@mui/icons-material';
 
 import Filter from '../components/Filter';
-import ListOfBranch from '../components/ListOfBranch';
-import ListOfItems from '../components/ListOfItems';
-import ListOfExclusionContainer from '../components/ListOfExclusionContainer';
-import { useBranches } from '../hooks/useBranches';
-import useItems from '../hooks/useItems';
+import NBFIListOfBranch from '../components/NBFIListOfBranch';
+import NBFIListOfItems from '../components/NBFIListOfItems';
+import NBFIListOfExclusionContainer from '../components/NBFIListOfExclusionContainer';
+import { useNBFIBranches } from '../hooks/useNBFIBranches';
+import useNBFIItems from '../hooks/useNBFIItems';
 import { handleExportExcel } from '../utils/excelExport';
 
 const SectionHeader = ({ children, sx }) => (
@@ -56,8 +56,8 @@ export default function NBFIExclusivityForm() {
   });
   
   // Fetch branches and items data for export
-  const { branches: rawBranches, loading: branchesLoading } = useBranches(filters);
-  const { items: rawItems, loading: itemsLoading } = useItems(filters);
+  const { branches: rawBranches, loading: branchesLoading } = useNBFIBranches(filters);
+  const { items: rawItems, loading: itemsLoading } = useNBFIItems(filters);
 
   const handleFilterChange = useCallback((next) => {
     setFilters(next);
@@ -119,7 +119,7 @@ export default function NBFIExclusivityForm() {
       {/* Filter and Export Button Row */}
       <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
         <Box sx={{ flex: 1 }}>
-          <Filter onChange={handleFilterChange} />
+          <Filter onChange={handleFilterChange} categoryLabel="Brand" isNBFI={true} />
         </Box>
         <Button
           variant="contained"
@@ -150,7 +150,7 @@ export default function NBFIExclusivityForm() {
                 </SectionHeader>
               </AccordionSummary>
               <AccordionDetails sx={{ maxHeight: 560 }}>
-                <ListOfBranch filters={filters} />
+                <NBFIListOfBranch filters={filters} />
               </AccordionDetails>
             </Accordion>
           </Grid>
@@ -174,7 +174,7 @@ export default function NBFIExclusivityForm() {
                 </SectionHeader>
               </AccordionSummary>
               <AccordionDetails sx={{ maxHeight: 560 }}>
-                <ListOfItems 
+                <NBFIListOfItems 
                   filters={filters}
                   quantities={quantities}
                   setQuantities={setQuantities}
@@ -202,7 +202,7 @@ export default function NBFIExclusivityForm() {
                 </SectionHeader>
               </AccordionSummary>
               <AccordionDetails sx={{ maxHeight: 560 }}>
-                <ListOfExclusionContainer 
+                <NBFIListOfExclusionContainer 
                   filters={filters}
                   quantities={quantities}
                   onBranchesChange={handleBranchesChange}

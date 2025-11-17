@@ -51,7 +51,7 @@ export default function Login() {
         console.log('Result object:', result);
         console.log('User from AuthContext after login:', localStorage.getItem('user'));
         // Navigate to dashboard
-        navigate('/dashboard/exclusivity-form');
+        navigate('/exclusivity-form');
       } else {
         console.error('Login failed:', result.error);
         setError(result.error || 'Login failed. Please check your credentials and try again.');

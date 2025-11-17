@@ -1380,5 +1380,915 @@ router.post('/mass-upload-exclusivity-branches', verifyToken, upload.single('fil
   }
 });
 
+// ===============================
+// NBFI EXCLUSIVITY ENDPOINTS
+// ===============================
+
+// POST /api/inventory/nbfi/add-exclusivity-items - Add items to NBFI store exclusivity list
+router.post('/nbfi/add-exclusivity-items', verifyToken, async (req, res) => {
+  try {
+    const pool = getPool();
+    const { items } = req.body;
+
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ error: 'Items array is required' });
+    }
+
+    const results = {
+      success: [],
+      failed: [],
+      skipped: []
+    };
+
+    // New schema: nbfi_item_exclusivity_list contains per-item flags for store types: SM, RDS, WDS.
+    // Expect callers to provide either a `storeType` field (SM|RDS|WDS) per item or an overall
+    // `storeType` in the request body. For backward compatibility, if only `storeCode` is given,
+    // attempt to derive the storeType from `nbfi_stores.categoryClass`.
+    const allowedTypes = ['SM', 'RDS', 'WDS'];
+    const requestLevelStoreType = (req.body.storeType || req.body.category || '') + '';
+
+    for (const item of items) {
+      try {
+        const { storeCode, storeType: itemStoreType, itemCode } = item;
+
+        if (!itemCode) {
+          results.failed.push({ itemCode: itemCode || 'unknown', reason: 'Missing required field: itemCode' });
+          continue;
+        }
+
+        // Determine the storeType to set for this item
+        let storeType = (itemStoreType || requestLevelStoreType || '').toString().trim().toUpperCase();
+        if (!storeType && storeCode) {
+          // Try to derive from nbfi_stores.categoryClass
+          const [rows] = await pool.execute(`SELECT categoryClass FROM nbfi_stores WHERE storeCode = ? LIMIT 1`, [storeCode]);
+          if (Array.isArray(rows) && rows.length > 0) {
+            storeType = String(rows[0].categoryClass || '').trim().toUpperCase();
+          }
+        }
+
+        if (!allowedTypes.includes(storeType)) {
+          results.failed.push({ itemCode, storeCode: storeCode || null, reason: `Invalid or missing storeType (must be one of: ${allowedTypes.join(', ')})` });
+          continue;
+        }
+
+        // Ensure column exists
+        const [colCheck] = await pool.execute(
+          `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'nbfi_item_exclusivity_list' AND COLUMN_NAME = ?`,
+          [storeType]
+        );
+        if (!Array.isArray(colCheck) || colCheck.length === 0) {
+          results.failed.push({ itemCode, storeCode: storeCode || null, reason: `Store type column ${storeType} not found in nbfi_item_exclusivity_list` });
+          continue;
+        }
+
+        // Try to update existing row; if none exists, insert
+        const updateQuery = `UPDATE nbfi_item_exclusivity_list SET \`${storeType}\` = '1', updated_at = CURRENT_TIMESTAMP WHERE itemCode = ?`;
+        const [updateRes] = await pool.execute(updateQuery, [itemCode]);
+        if (updateRes.affectedRows === 0) {
+          const insertQuery = `INSERT INTO nbfi_item_exclusivity_list (itemCode, \`${storeType}\`) VALUES (?, '1')`;
+          await pool.execute(insertQuery, [itemCode]);
+          results.success.push({ itemCode, storeType, action: 'inserted' });
+        } else {
+          results.success.push({ itemCode, storeType, action: 'updated' });
+        }
+
+      } catch (error) {
+        console.error(`Error processing item ${item.itemCode}:`, error);
+        results.failed.push({ itemCode: item.itemCode || 'unknown', storeCode: item.storeCode || null, reason: error.message });
+      }
+    }
+
+    // Log audit trail for successful additions
+    if (results.success.length > 0) {
+      try {
+        const inserted = results.success.filter(r => r.action === 'inserted');
+        const updated = results.success.filter(r => r.action === 'updated');
+
+        if (inserted.length > 0) {
+          await logAudit({
+            entityType: 'nbfi_store_exclusivity',
+            entityId: null,
+            action: 'bulk_create',
+            entityName: `${inserted.length} NBFI store exclusivity item(s)`,
+            userId: req.user?.id || null,
+            userName: req.user?.username || 'System',
+            userEmail: req.user?.email || req.email || null,
+            ip: getIp(req),
+            details: {
+              items: inserted.map(r => ({
+                itemCode: r.itemCode,
+                storeCode: r.storeCode
+              })),
+              count: inserted.length
+            }
+          });
+        }
+
+        if (updated.length > 0) {
+          await logAudit({
+            entityType: 'nbfi_store_exclusivity',
+            entityId: null,
+            action: 'bulk_update',
+            entityName: `${updated.length} NBFI store exclusivity item(s)`,
+            userId: req.user?.id || null,
+            userName: req.user?.username || 'System',
+            userEmail: req.user?.email || req.email || null,
+            ip: getIp(req),
+            details: {
+              items: updated.map(r => ({
+                itemCode: r.itemCode,
+                storeCode: r.storeCode
+              })),
+              count: updated.length
+            }
+          });
+        }
+      } catch (auditError) {
+        console.error('Error logging audit trail:', auditError);
+      }
+    }
+
+    const responseStatus = results.failed.length > 0 ? 207 : 200;
+    res.status(responseStatus).json({
+      message: 'Items processed',
+      summary: {
+        total: items.length,
+        success: results.success.length,
+        failed: results.failed.length,
+        skipped: results.skipped.length
+      },
+      results
+    });
+
+  } catch (error) {
+    console.error('Error adding NBFI exclusivity items:', error);
+    res.status(500).json({ 
+      error: 'Failed to add items',
+      message: error.message 
+    });
+  }
+});
+
+// POST /api/inventory/nbfi/remove-exclusivity-item - Remove item from NBFI store exclusivity
+router.post('/nbfi/remove-exclusivity-item', verifyToken, async (req, res) => {
+  try {
+    const pool = getPool();
+    // New schema: per-item flags exist in nbfi_item_exclusivity_list (SM/RDS/WDS columns)
+    const { itemCode, storeCode, storeType } = req.body;
+
+    console.log('🗑️ Remove NBFI exclusivity request:', { itemCode, storeCode, storeType });
+
+    if (!itemCode) {
+      return res.status(400).json({ error: 'itemCode is required' });
+    }
+
+    const allowedTypes = ['SM', 'RDS', 'WDS'];
+    let type = (storeType || '').toString().trim().toUpperCase();
+    if (!type && storeCode) {
+      // attempt to derive storeType from nbfi_stores.categoryClass
+      const [rows] = await pool.execute(`SELECT categoryClass FROM nbfi_stores WHERE storeCode = ? LIMIT 1`, [storeCode]);
+      if (Array.isArray(rows) && rows.length > 0) {
+        type = String(rows[0].categoryClass || '').trim().toUpperCase();
+      }
+    }
+
+    if (!allowedTypes.includes(type)) {
+      return res.status(400).json({ error: `storeType is required and must be one of: ${allowedTypes.join(', ')}` });
+    }
+
+    // Ensure column exists
+    const [colCheck] = await pool.execute(
+      `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'nbfi_item_exclusivity_list' AND COLUMN_NAME = ?`,
+      [type]
+    );
+    if (!Array.isArray(colCheck) || colCheck.length === 0) {
+      return res.status(400).json({ error: `Store type column ${type} not found in nbfi_item_exclusivity_list` });
+    }
+
+    const deleteQuery = `UPDATE nbfi_item_exclusivity_list SET \`${type}\` = NULL, updated_at = CURRENT_TIMESTAMP WHERE itemCode = ?`;
+    const [result] = await pool.execute(deleteQuery, [itemCode]);
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'Exclusivity record not found or no change needed' });
+    }
+
+    // Log audit trail for removal
+    try {
+      await logAudit({
+        entityType: 'nbfi_store_exclusivity',
+        entityId: `${storeCode}-${itemCode}`,
+        action: 'remove',
+        entityName: `Removed ${itemCode} from store ${storeCode}`,
+        userId: req.user?.id || null,
+        userName: req.user?.username || 'System',
+        userEmail: req.user?.email || req.email || null,
+        ip: getIp(req),
+        details: {
+          itemCode,
+          storeCode,
+          action: 'deleted'
+        }
+      });
+    } catch (auditError) {
+      console.error('Error logging removal audit:', auditError);
+    }
+
+    res.json({ 
+      success: true, 
+      message: 'Item exclusivity removed successfully',
+      itemCode,
+      storeCode
+    });
+
+  } catch (error) {
+    console.error('Error removing NBFI exclusivity item:', error);
+    res.status(500).json({ 
+      error: 'Failed to remove item',
+      message: error.message 
+    });
+  }
+});
+
+// POST /api/inventory/nbfi/mass-upload-exclusivity-items - Mass upload NBFI store exclusivity items from Excel/CSV
+router.post('/nbfi/mass-upload-exclusivity-items', verifyToken, upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    const pool = getPool();
+    let data;
+
+    try {
+      const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
+      const sheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[sheetName];
+      data = XLSX.utils.sheet_to_json(worksheet);
+    } catch (parseError) {
+      console.error('Error parsing file:', parseError);
+      return res.status(400).json({ 
+        error: 'Failed to parse file. Please ensure it is a valid Excel or CSV file.',
+        message: parseError.message 
+      });
+    }
+
+    if (!data || data.length === 0) {
+      return res.status(400).json({ error: 'File is empty or has no valid data' });
+    }
+
+    const results = {
+      success: [],
+      failed: [],
+      skipped: []
+    };
+
+    for (let i = 0; i < data.length; i++) {
+      const row = data[i];
+      const rowNumber = i + 2;
+
+      try {
+        const storeCode = row.StoreCode || row.storeCode || row.STORECODE || row['Store Code'];
+        const itemCode = row.ItemCode || row.itemCode || row.ITEMCODE || row['Item Code'];
+
+        if (!storeCode || !itemCode) {
+          results.failed.push({
+            row: rowNumber,
+            itemCode: itemCode || 'N/A',
+            storeCode: storeCode || 'N/A',
+            reason: 'Missing required fields (StoreCode or ItemCode)'
+          });
+          continue;
+        }
+
+        const storeCodeTrimmed = String(storeCode).trim();
+        const itemCodeTrimmed = String(itemCode).trim();
+
+        if (!storeCodeTrimmed || !itemCodeTrimmed) {
+          results.failed.push({
+            row: rowNumber,
+            itemCode: itemCodeTrimmed || 'N/A',
+            storeCode: storeCodeTrimmed || 'N/A',
+            reason: 'One or more fields contain only whitespace'
+          });
+          continue;
+        }
+
+        // Validate ItemCode format
+        if (!/^[A-Z0-9_-]+$/i.test(itemCodeTrimmed)) {
+          results.failed.push({
+            row: rowNumber,
+            itemCode: itemCodeTrimmed,
+            storeCode: storeCodeTrimmed,
+            reason: 'Invalid ItemCode format. Only letters, numbers, dash, and underscore are allowed.'
+          });
+          continue;
+        }
+
+        // Check if ItemCode exists in nbfi_item_list table
+        const [itemExists] = await pool.execute(`
+          SELECT itemCode 
+          FROM nbfi_item_list 
+          WHERE itemCode = ?
+        `, [itemCodeTrimmed]);
+        
+        if (itemExists.length === 0) {
+          results.failed.push({
+            row: rowNumber,
+            itemCode: itemCodeTrimmed,
+            storeCode: storeCodeTrimmed,
+            reason: `ItemCode "${itemCodeTrimmed}" does not exist in nbfi_item_list table.`
+          });
+          continue;
+        }
+
+        // Check if StoreCode exists in nbfi_stores table
+        const [storeExists] = await pool.execute(`
+          SELECT storeCode 
+          FROM nbfi_stores 
+          WHERE storeCode = ?
+        `, [storeCodeTrimmed]);
+        
+        if (storeExists.length === 0) {
+          results.failed.push({
+            row: rowNumber,
+            itemCode: itemCodeTrimmed,
+            storeCode: storeCodeTrimmed,
+            reason: `StoreCode "${storeCodeTrimmed}" does not exist in nbfi_stores table.`
+          });
+          continue;
+        }
+
+        // Determine storeType for this store (SM|RDS|WDS) - attempt to derive from nbfi_stores.categoryClass
+        const [storeRow] = await pool.execute(`SELECT categoryClass FROM nbfi_stores WHERE storeCode = ? LIMIT 1`, [storeCodeTrimmed]);
+        let storeType = (Array.isArray(storeRow) && storeRow.length > 0) ? String(storeRow[0].categoryClass || '').trim().toUpperCase() : '';
+        const allowedTypes = ['SM','RDS','WDS'];
+        if (!allowedTypes.includes(storeType)) {
+          // fallback to request-level column or default to SM
+          storeType = (req.body.storeType || req.body.category || '').toString().trim().toUpperCase();
+        }
+        if (!allowedTypes.includes(storeType)) {
+          storeType = 'SM';
+        }
+
+        // Ensure column exists
+        const [colCheck] = await pool.execute(
+          `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'nbfi_item_exclusivity_list' AND COLUMN_NAME = ?`,
+          [storeType]
+        );
+        if (!Array.isArray(colCheck) || colCheck.length === 0) {
+          // Add column automatically if missing
+          await pool.execute(`ALTER TABLE nbfi_item_exclusivity_list ADD COLUMN \`${storeType}\` VARCHAR(10) NULL`);
+        }
+
+        // Upsert into nbfi_item_exclusivity_list: set the storeType flag for this itemCode
+        const updateQuery = `UPDATE nbfi_item_exclusivity_list SET \`${storeType}\` = '1', updated_at = CURRENT_TIMESTAMP WHERE itemCode = ?`;
+        const [updateRes] = await pool.execute(updateQuery, [itemCodeTrimmed]);
+        let action = 'updated';
+        if (updateRes.affectedRows === 0) {
+          const insertQuery = `INSERT INTO nbfi_item_exclusivity_list (itemCode, \`${storeType}\`) VALUES (?, '1')`;
+          await pool.execute(insertQuery, [itemCodeTrimmed]);
+          action = 'inserted';
+        }
+
+        results.success.push({ row: rowNumber, itemCode: itemCodeTrimmed, storeCode: storeCodeTrimmed, storeType, action });
+
+      } catch (error) {
+        console.error(`Error processing row ${rowNumber}:`, error);
+        results.failed.push({
+          row: rowNumber,
+          itemCode: row.ItemCode || row.itemCode || 'N/A',
+          storeCode: row.StoreCode || row.storeCode || 'N/A',
+          reason: error.message
+        });
+      }
+    }
+
+    // Log audit trail
+    try {
+      await logAudit({
+        entityType: 'nbfi_store_exclusivity',
+        entityId: null,
+        action: 'mass_upload',
+        entityName: `Mass upload: ${results.success.length} successful, ${results.failed.length} failed`,
+        userId: req.user?.id || null,
+        userName: req.user?.username || 'System',
+        userEmail: req.user?.email || req.email || null,
+        ip: getIp(req),
+        details: {
+          fileName: req.file.originalname,
+          fileSize: req.file.size,
+          uploadTimestamp: new Date().toISOString(),
+          summary: {
+            totalRows: data.length,
+            successCount: results.success.length,
+            failedCount: results.failed.length,
+            skippedCount: results.skipped.length
+          },
+          successfulItems: results.success.map(item => ({
+            row: item.row,
+            itemCode: item.itemCode,
+            storeCode: item.storeCode,
+            action: item.action
+          })),
+          failedItems: results.failed.map(item => ({
+            row: item.row,
+            itemCode: item.itemCode,
+            storeCode: item.storeCode,
+            reason: item.reason
+          }))
+        }
+      });
+    } catch (auditError) {
+      console.error('Error logging audit trail:', auditError);
+    }
+
+    const responseStatus = results.failed.length > 0 ? 207 : 200;
+    res.status(responseStatus).json({
+      message: 'File processed',
+      summary: {
+        total: data.length,
+        success: results.success.length,
+        failed: results.failed.length,
+        skipped: results.skipped.length
+      },
+      results
+    });
+
+  } catch (error) {
+    console.error('Error in NBFI mass upload:', error);
+    res.status(500).json({ 
+      error: 'Failed to process upload',
+      message: error.message 
+    });
+  }
+});
+
+// POST /api/inventory/nbfi/remove-exclusivity-branches - Remove branches from NBFI store list
+router.post('/nbfi/remove-exclusivity-branches', verifyToken, async (req, res) => {
+  try {
+    const pool = getPool();
+    const { branchCodes } = req.body;
+
+    console.log('🗑️ Remove NBFI branches request:', { branchCodes });
+
+    if (!branchCodes || !Array.isArray(branchCodes) || branchCodes.length === 0) {
+      return res.status(400).json({ error: 'branchCodes array is required' });
+    }
+
+    const results = {
+      success: [],
+      failed: []
+    };
+
+    // Expect a brand identifier in the request body to know which brand column to unset.
+    // Accept either `brand` (brandCode/name) or `category` (legacy field used by frontend as brand).
+    const brandInput = req.body.brand || req.body.category;
+    if (!brandInput) {
+      return res.status(400).json({ error: 'Missing brand/category identifier in request body' });
+    }
+
+    // Build sanitized brand column name and ensure it exists in nbfi_store_exclusivity_list
+    const sanitize = (s) => String(s || '').trim().replace(/\s+/g, '_').replace(/[^A-Za-z0-9_]/g, '').toLowerCase();
+    const brandCol = `brand_${sanitize(brandInput)}`;
+
+    // Verify brand column exists in exclusivity list table
+    const [colCheck] = await pool.execute(
+      `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'nbfi_store_exclusivity_list' AND COLUMN_NAME = ?`,
+      [brandCol]
+    );
+    if (!Array.isArray(colCheck) || colCheck.length === 0) {
+      return res.status(400).json({ error: `Invalid brand '${brandInput}' or brand column not found in nbfi_store_exclusivity_list` });
+    }
+
+    for (const branchCode of branchCodes) {
+      try {
+        // Unset the brand flag in nbfi_store_exclusivity_list for this store
+        const unsetExclusivityQuery = `
+          UPDATE nbfi_store_exclusivity_list
+          SET \`${brandCol}\` = NULL, updated_at = CURRENT_TIMESTAMP
+          WHERE storeCode = ?
+        `;
+        await pool.execute(unsetExclusivityQuery, [branchCode]);
+
+        // Also unset the brand flag in nbfi_stores if the column exists there
+        const [colCheckStores] = await pool.execute(
+          `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'nbfi_stores' AND COLUMN_NAME = ?`,
+          [brandCol]
+        );
+        if (Array.isArray(colCheckStores) && colCheckStores.length > 0) {
+          const unsetStoreQuery = `
+            UPDATE nbfi_stores
+            SET \`${brandCol}\` = NULL, updated_at = CURRENT_TIMESTAMP
+            WHERE storeCode = ?
+          `;
+          await pool.execute(unsetStoreQuery, [branchCode]);
+        }
+
+        // Optionally, keep existing behavior of deleting the store record entirely if required by callers.
+        // If you still want to delete the store row, uncomment the following lines:
+        // const deleteQuery = `DELETE FROM nbfi_stores WHERE storeCode = ?`;
+        // await pool.execute(deleteQuery, [branchCode]);
+
+        results.success.push(branchCode);
+
+      } catch (error) {
+        console.error(`Error processing branch ${branchCode}:`, error);
+        results.failed.push({
+          branchCode,
+          reason: error.message
+        });
+      }
+    }
+
+    // Log audit trail for successful removals
+    if (results.success.length > 0) {
+      try {
+        await logAudit({
+          entityType: 'nbfi_branch_exclusivity',
+          entityId: null,
+          action: 'bulk_remove',
+          entityName: `${results.success.length} NBFI branch(es)`,
+          userId: req.user?.id || null,
+          userName: req.user?.username || 'System',
+          userEmail: req.user?.email || req.email || null,
+          ip: getIp(req),
+          details: {
+            branchCodes: results.success,
+            count: results.success.length
+          }
+        });
+      } catch (auditError) {
+        console.error('Error logging audit trail:', auditError);
+      }
+    }
+
+    const responseStatus = results.failed.length > 0 ? 207 : 200;
+    res.status(responseStatus).json({
+      message: 'Branches processed',
+      summary: {
+        total: branchCodes.length,
+        success: results.success.length,
+        failed: results.failed.length
+      },
+      results
+    });
+
+  } catch (error) {
+    console.error('Error removing NBFI exclusivity branches:', error);
+    res.status(500).json({ 
+      error: 'Failed to remove branches',
+      message: error.message 
+    });
+  }
+});
+
+// POST /api/inventory/nbfi/add-exclusivity-branches - Add branches to NBFI store list
+router.post('/nbfi/add-exclusivity-branches', verifyToken, async (req, res) => {
+  try {
+    const pool = getPool();
+    const { branches } = req.body;
+
+    if (!branches || !Array.isArray(branches) || branches.length === 0) {
+      return res.status(400).json({ error: 'Branches array is required' });
+    }
+
+    const results = {
+      success: [],
+      failed: [],
+      skipped: []
+    };
+
+    // We expect callers to provide brand/category information. Accept either per-branch `category`/`brand`
+    // or an overall `brand` in the request body. When adding branches we will set the dynamic
+    // `brand_<sanitized>` column to '1' in both `nbfi_store_exclusivity_list` and `nbfi_stores`.
+    const sanitize = (s) => String(s || '').trim().replace(/\s+/g, '_').replace(/[^A-Za-z0-9_]/g, '').toLowerCase();
+
+    for (const branch of branches) {
+      try {
+        // Accept multiple possible field names for compatibility with different callers
+        const storeCode = branch.storeCode || branch.branchCode || branch.store_code || branch.branch_code;
+        const storeName = branch.storeName || branch.store_name || null;
+        const chainCode = branch.chainCode || branch.chain || branch.chain_code || null;
+        const storeClassification = branch.categoryClass || branch.storeClass || branch.store_class || branch.storeClassification || null;
+
+        // Brand can come from branch or overall request
+        const brandInput = branch.brand || branch.category || req.body.brand || req.body.category;
+        if (!brandInput) {
+          results.failed.push({ storeCode: storeCode || 'unknown', reason: 'Missing brand/category identifier' });
+          continue;
+        }
+
+        if (!storeCode) {
+          results.failed.push({ storeCode: 'unknown', reason: 'Missing required field: storeCode/branchCode' });
+          continue;
+        }
+
+        const brandCol = `brand_${sanitize(brandInput)}`;
+
+        // Verify brand column exists in nbfi_store_exclusivity_list
+        const [colCheck] = await pool.execute(
+          `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'nbfi_store_exclusivity_list' AND COLUMN_NAME = ?`,
+          [brandCol]
+        );
+        if (!Array.isArray(colCheck) || colCheck.length === 0) {
+          results.failed.push({ storeCode, reason: `Invalid brand '${brandInput}' or brand column not found` });
+          continue;
+        }
+
+        // Upsert nbfi_stores (do not attempt to dynamically inject column names here)
+        const upsertQuery = `
+          INSERT INTO nbfi_stores (storeCode, storeName, chainCode, categoryClass)
+          VALUES (?, ?, ?, ?)
+          ON DUPLICATE KEY UPDATE
+            storeName = VALUES(storeName),
+            chainCode = VALUES(chainCode),
+            categoryClass = VALUES(categoryClass),
+            updated_at = CURRENT_TIMESTAMP
+        `;
+        await pool.execute(upsertQuery, [storeCode, storeName || '', chainCode || null, storeClassification || null]);
+
+        // Ensure a row exists in nbfi_store_exclusivity_list for this store
+        const [existRows] = await pool.execute(`SELECT id FROM nbfi_store_exclusivity_list WHERE storeCode = ?`, [storeCode]);
+        if (Array.isArray(existRows) && existRows.length > 0) {
+          // Update existing exclusivity row: set brand flag and optionally update storeClassification
+          const updateExcl = `
+            UPDATE nbfi_store_exclusivity_list
+            SET \`${brandCol}\` = '1', storeClassification = COALESCE(?, storeClassification), updated_at = CURRENT_TIMESTAMP
+            WHERE storeCode = ?
+          `;
+          await pool.execute(updateExcl, [storeClassification, storeCode]);
+        } else {
+          // Insert new exclusivity row (set brand flag)
+          const insertExcl = `
+            INSERT INTO nbfi_store_exclusivity_list (storeCode, storeClassification, \`${brandCol}\`)
+            VALUES (?, ?, '1')
+          `;
+          await pool.execute(insertExcl, [storeCode, storeClassification || null]);
+        }
+
+        // Also set brand flag in nbfi_stores if the column exists there
+        const [colCheckStores] = await pool.execute(
+          `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'nbfi_stores' AND COLUMN_NAME = ?`,
+          [brandCol]
+        );
+        if (Array.isArray(colCheckStores) && colCheckStores.length > 0) {
+          const setStore = `UPDATE nbfi_stores SET \`${brandCol}\` = '1', updated_at = CURRENT_TIMESTAMP WHERE storeCode = ?`;
+          await pool.execute(setStore, [storeCode]);
+        }
+
+        results.success.push({ storeCode, storeName, chainCode, storeClassification, brand: brandInput });
+
+      } catch (error) {
+        console.error(`Error processing branch ${branch.storeCode || branch.branchCode}:`, error);
+        results.failed.push({ storeCode: branch.storeCode || branch.branchCode || 'unknown', reason: error.message });
+      }
+    }
+
+    // Log audit trail for successful additions
+    if (results.success.length > 0) {
+      try {
+        await logAudit({
+          entityType: 'nbfi_branch_exclusivity',
+          entityId: null,
+          action: 'bulk_assign',
+          entityName: `${results.success.length} NBFI branch(es)`,
+          userId: req.user?.id || null,
+          userName: req.user?.username || 'System',
+          userEmail: req.user?.email || req.email || null,
+          ip: getIp(req),
+          details: {
+            branches: results.success.map(r => ({
+              storeCode: r.storeCode,
+              storeName: r.storeName,
+              chainCode: r.chainCode,
+              categoryClass: r.categoryClass,
+              action: r.action
+            })),
+            count: results.success.length
+          }
+        });
+      } catch (auditError) {
+        console.error('Error logging audit trail:', auditError);
+      }
+    }
+
+    const responseStatus = results.failed.length > 0 ? 207 : 200;
+    res.status(responseStatus).json({
+      message: 'Branches processed',
+      summary: {
+        total: branches.length,
+        success: results.success.length,
+        failed: results.failed.length,
+        skipped: results.skipped.length
+      },
+      results
+    });
+
+  } catch (error) {
+    console.error('Error adding NBFI exclusivity branches:', error);
+    res.status(500).json({ 
+      error: 'Failed to add branches',
+      message: error.message 
+    });
+  }
+});
+
+// POST /api/inventory/nbfi/mass-upload-exclusivity-branches - Mass upload NBFI branches from Excel file
+router.post('/nbfi/mass-upload-exclusivity-branches', verifyToken, upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
+    const sheetName = workbook.SheetNames[0];
+    const worksheet = workbook.Sheets[sheetName];
+    const data = XLSX.utils.sheet_to_json(worksheet);
+
+    if (data.length === 0) {
+      return res.status(400).json({ error: 'The uploaded file is empty' });
+    }
+
+    const pool = getPool();
+    const results = {
+      success: [],
+      failed: []
+    };
+
+    // Get all chains and categories for validation
+    const [chains] = await pool.query('SELECT chainCode, chainName FROM nbfi_chains');
+    const [categories] = await pool.query('SELECT catCode, category FROM nbfi_categories');
+
+    const chainMap = new Map();
+    chains.forEach(chain => {
+      chainMap.set(chain.chainName.toLowerCase().trim(), chain.chainCode);
+      chainMap.set(chain.chainCode.toLowerCase().trim(), chain.chainCode);
+    });
+
+    const categoryMap = new Map();
+    categories.forEach(cat => {
+      categoryMap.set(cat.category.toLowerCase().trim(), cat.catCode);
+      categoryMap.set(cat.catCode.toLowerCase().trim(), cat.catCode);
+    });
+
+    for (let i = 0; i < data.length; i++) {
+      const row = data[i];
+      const rowNum = i + 2;
+
+      const errors = [];
+      
+      if (!row['Store Code'] || row['Store Code'].toString().trim() === '') {
+        errors.push('Store Code is required');
+      }
+
+      if (errors.length > 0) {
+        results.failed.push({
+          row: rowNum,
+          storeCode: row['Store Code'] || 'N/A',
+          data: row,
+          errors: errors,
+          reason: errors.join('; ')
+        });
+        continue;
+      }
+
+      const storeCode = row['Store Code'].toString().trim();
+      const storeName = row['Store Description'] ? row['Store Description'].toString().trim() : '';
+      const chainInput = row.Chain ? row.Chain.toString().trim() : '';
+      const categoryInput = row.Category ? row.Category.toString().trim() : '';
+
+      let chainCode = null;
+      let categoryClass = null;
+
+      if (chainInput) {
+        chainCode = chainMap.get(chainInput.toLowerCase());
+        if (!chainCode) {
+          errors.push(`Invalid Chain: "${chainInput}"`);
+        }
+      }
+
+      if (categoryInput) {
+        categoryClass = categoryMap.get(categoryInput.toLowerCase());
+        if (!categoryClass) {
+          errors.push(`Invalid Category: "${categoryInput}"`);
+        }
+      }
+
+      if (errors.length > 0) {
+        results.failed.push({
+          row: rowNum,
+          storeCode: storeCode,
+          data: row,
+          errors: errors,
+          reason: errors.join('; ')
+        });
+        continue;
+      }
+
+      // Check if store exists
+      const [storeCheck] = await pool.query(
+        'SELECT storeCode, storeName FROM nbfi_stores WHERE storeCode = ?',
+        [storeCode]
+      );
+
+      const storeExists = storeCheck.length > 0;
+      const actualStoreName = storeExists ? storeCheck[0].storeName : storeName;
+
+      try {
+        if (storeExists) {
+          await pool.query(
+            `UPDATE nbfi_stores 
+             SET storeName = ?, chainCode = ?, categoryClass = ?, updated_at = CURRENT_TIMESTAMP
+             WHERE storeCode = ?`,
+            [actualStoreName, chainCode, categoryClass, storeCode]
+          );
+        } else {
+          await pool.query(
+            `INSERT INTO nbfi_stores (storeCode, storeName, chainCode, categoryClass)
+             VALUES (?, ?, ?, ?)`,
+            [storeCode, actualStoreName, chainCode, categoryClass]
+          );
+        }
+
+        results.success.push({
+          row: rowNum,
+          storeCode: storeCode,
+          storeName: actualStoreName,
+          chain: chainInput || 'N/A',
+          category: categoryInput || 'N/A',
+          action: storeExists ? 'Updated' : 'Created'
+        });
+      } catch (error) {
+        results.failed.push({
+          row: rowNum,
+          storeCode: storeCode,
+          data: row,
+          errors: [`Database error: ${error.message}`],
+          reason: `Database error: ${error.message}`
+        });
+      }
+    }
+
+    const uploadTimestamp = new Date().toISOString();
+    const createdCount = results.success.filter(item => item.action === 'Created').length;
+    const updatedCount = results.success.filter(item => item.action === 'Updated').length;
+    
+    const auditDetails = {
+      filename: req.file.originalname,
+      fileSize: req.file.size,
+      timestamp: uploadTimestamp,
+      totalRows: data.length,
+      successCount: results.success.length,
+      createdCount: createdCount,
+      updatedCount: updatedCount,
+      failedCount: results.failed.length,
+      successfulBranches: results.success.map(item => ({
+        storeCode: item.storeCode,
+        storeName: item.storeName,
+        chain: item.chain,
+        category: item.category,
+        action: item.action
+      })),
+      failedBranches: results.failed.map(item => ({
+        row: item.row,
+        storeCode: item.storeCode,
+        errors: item.errors
+      }))
+    };
+
+    await logAudit({
+      entityType: 'nbfi_branch_exclusivity',
+      entityId: null,
+      action: 'mass_upload',
+      entityName: `Mass upload: ${createdCount} created, ${updatedCount} updated, ${results.failed.length} failed`,
+      userId: req.user?.id || null,
+      userName: req.user?.username || 'System',
+      userEmail: req.user?.email || req.email || null,
+      ip: getIp(req),
+      details: auditDetails
+    });
+
+    res.json({
+      message: `Mass upload completed: ${results.success.length} successful (${createdCount} created, ${updatedCount} updated), ${results.failed.length} failed`,
+      summary: {
+        total: data.length,
+        success: results.success.length,
+        created: createdCount,
+        updated: updatedCount,
+        failed: results.failed.length
+      },
+      results
+    });
+
+  } catch (error) {
+    console.error('Error during NBFI mass upload:', error);
+    
+    res.status(500).json({ 
+      error: 'Failed to process mass upload',
+      message: error.message 
+    });
+  }
+});
+
 module.exports = router;
 

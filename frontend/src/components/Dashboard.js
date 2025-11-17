@@ -123,12 +123,12 @@ const Dashboard = () => {
   const { user, logout } = useAuth();
   
   // TEMPORARY DEBUG - Remove after testing
-  useEffect(() => {
-    console.log('=== DASHBOARD DEBUG ===');
-    console.log('User from context:', user);
-    console.log('User from localStorage:', localStorage.getItem('user'));
-    console.log('Parsed user:', JSON.parse(localStorage.getItem('user') || '{}'));
-  }, [user]);
+  // useEffect(() => {
+  //   console.log('=== DASHBOARD DEBUG ===');
+  //   console.log('User from context:', user);
+  //   console.log('User from localStorage:', localStorage.getItem('user'));
+  //   console.log('Parsed user:', JSON.parse(localStorage.getItem('user') || '{}'));
+  // }, [user]);
   
   const [mobileOpen, setMobileOpen] = useState(false);
   const [currentView, setCurrentView] = useState('exclusivityform');
@@ -139,10 +139,8 @@ const Dashboard = () => {
   // Sync currentView with URL
   useEffect(() => {
     const path = location.pathname;
-    if (path.includes('exclusivity-form') && !path.includes('nbfi')) {
+    if (path.includes('exclusivity-form')) {
       setCurrentView('exclusivityform');
-    } else if (path.includes('nbfi-exclusivity-form')) {
-      setCurrentView('nbfiexclusivityform');
     } else if (path.includes('item-maintenance')) {
       setCurrentView('itemmaintenance');
     } else if (path.includes('store-maintenance')) {
@@ -152,26 +150,19 @@ const Dashboard = () => {
     } else if (path.includes('audit-logs')) {
       setCurrentView('auditlogs');
     } else {
-      // Default based on business unit
-      if (user?.businessUnit === 'NBFI' && user?.role !== 'admin') {
-        setCurrentView('nbfiexclusivityform');
-      } else {
-        setCurrentView('exclusivityform');
-      }
+      // Default to exclusivity form
+      setCurrentView('exclusivityform');
     }
   }, [location.pathname, user]);
 
-  // Redirect non-EPC users away from EPC-only pages
+  // Redirect non-EPC users away from EPC-only pages (excluding exclusivity form which is for all)
   useEffect(() => {
     const hasEpcAccess = user?.role === 'admin' || user?.businessUnit === 'EPC';
-    const epcOnlyViews = ['exclusivityform', 'itemmaintenance', 'storemaintenance'];
+    const epcOnlyViews = ['itemmaintenance', 'storemaintenance'];
     
     if (!hasEpcAccess && epcOnlyViews.includes(currentView)) {
-      // Redirect to user management if admin, otherwise show a warning
-      if (user?.role === 'admin') {
-        navigate('/dashboard/user-management');
-      }
-      // For non-EPC users, the renderCurrentView will show the warning message
+      // Redirect to exclusivity form for non-EPC users
+      navigate('/exclusivity-form');
     }
   }, [currentView, user, navigate]);
 
@@ -250,12 +241,11 @@ const Dashboard = () => {
 
   // Update menuItems to include Disposal
   const allMenuItems = [
-    { text: 'Exclusivity Form', icon: <DescriptionOutlined />, view: 'exclusivityform', path: '/dashboard/exclusivity-form', epcOnly: true },
-    { text: 'NBFI Exclusivity Form', icon: <DescriptionOutlined />, view: 'nbfiexclusivityform', path: '/dashboard/nbfi-exclusivity-form', nbfiOnly: true },
-    { text: 'Item Maintenance', icon: <Inventory2Outlined />, view: 'itemmaintenance', path: '/dashboard/item-maintenance', epcOnly: true },
-    { text: 'Store Maintenance', icon: <StoreMallDirectoryOutlined />, view: 'storemaintenance', path: '/dashboard/store-maintenance', epcOnly: true },
-    { text: 'User Management', icon: <PeopleIcon />, view: 'usermanagement', adminOnly: true, path: '/dashboard/user-management' },
-    { text: 'Audit Logs', icon: <HistoryIcon />, view: 'auditlogs', adminOnly: true, path: '/dashboard/audit-logs' },
+    { text: 'Exclusivity Form', icon: <DescriptionOutlined />, view: 'exclusivityform', path: '/exclusivity-form' },
+    { text: 'Item Maintenance', icon: <Inventory2Outlined />, view: 'itemmaintenance', path: '/item-maintenance', epcOnly: true },
+    { text: 'Store Maintenance', icon: <StoreMallDirectoryOutlined />, view: 'storemaintenance', path: '/store-maintenance', epcOnly: true },
+    { text: 'User Management', icon: <PeopleIcon />, view: 'usermanagement', adminOnly: true, path: '/user-management' },
+    { text: 'Audit Logs', icon: <HistoryIcon />, view: 'auditlogs', adminOnly: true, path: '/audit-logs' },
     // { text: 'View Items', icon: <ViewListIcon />, view: 'view' },
     // { text: 'Assign', icon: <AssignIcon />, view: 'assign' },
     // { text: 'Receive', icon: <ReceiveIcon />, view: 'receive' },
@@ -266,29 +256,29 @@ const Dashboard = () => {
   // Filter menu items based on user role and business unit
   const menuItems = allMenuItems.filter(item => {
     // TEMPORARY DEBUG
-    console.log('--- Filtering:', item.text);
-    console.log('    adminOnly:', item.adminOnly, ', epcOnly:', item.epcOnly, ', nbfiOnly:', item.nbfiOnly);
-    console.log('    user.role:', user?.role, ', user.businessUnit:', user?.businessUnit);
+    // console.log('--- Filtering:', item.text);
+    // console.log('    adminOnly:', item.adminOnly, ', epcOnly:', item.epcOnly, ', nbfiOnly:', item.nbfiOnly);
+    // console.log('    user.role:', user?.role, ', user.businessUnit:', user?.businessUnit);
     
     // If item is admin only, check if user is admin
     if (item.adminOnly) {
       const result = user?.role === 'admin';
-      console.log('    Admin check result:', result);
+      // console.log('    Admin check result:', result);
       return result;
     }
     // If item is EPC only, check if user is admin OR has EPC business unit
     if (item.epcOnly) {
       const result = user?.role === 'admin' || user?.businessUnit === 'EPC';
-      console.log('    EPC check result:', result, '(admin:', user?.role === 'admin', 'isEPC:', user?.businessUnit === 'EPC', ')');
+      // console.log('    EPC check result:', result, '(admin:', user?.role === 'admin', 'isEPC:', user?.businessUnit === 'EPC', ')');
       return result;
     }
     // If item is NBFI only, check if user is admin OR has NBFI business unit
     if (item.nbfiOnly) {
       const result = user?.role === 'admin' || user?.businessUnit === 'NBFI';
-      console.log('    NBFI check result:', result, '(admin:', user?.role === 'admin', 'isNBFI:', user?.businessUnit === 'NBFI', ')');
+      // console.log('    NBFI check result:', result, '(admin:', user?.role === 'admin', 'isNBFI:', user?.businessUnit === 'NBFI', ')');
       return result;
     }
-    console.log('    Default: true');
+    // console.log('    Default: true');
     return true;
   });
 
@@ -441,26 +431,16 @@ const Dashboard = () => {
         }
         return <AuditLogs />;
       
-      case 'nbfiexclusivityform':
-        if (user?.role !== 'admin' && user?.businessUnit !== 'NBFI') {
-          return (
-            <MuiAlert severity="warning">
-              You don't have permission to access NBFI Exclusivity Form. NBFI business unit access required.
-            </MuiAlert>
-          );
-        }
-        return <NBFIExclusivityForm />;
-      
       case 'exclusivityform':
       default:
-        if (!hasEpcAccess) {
-          return (
-            <MuiAlert severity="warning">
-              You don't have permission to access Exclusivity Form. EPC business unit access required.
-            </MuiAlert>
-          );
+        // Conditional rendering based on business unit
+        if (user?.businessUnit === 'NBFI' && user?.role !== 'admin') {
+          // NBFI users see NBFI Exclusivity Form
+          return <NBFIExclusivityForm />;
+        } else {
+          // EPC users and admins see EPC Exclusivity Form
+          return <ExclusivityForm />;
         }
-        return <ExclusivityForm />;
     }
   };
 
@@ -546,8 +526,8 @@ const Dashboard = () => {
                 <MenuIcon />
               </IconButton>
               <Typography variant="h6" sx={{ flexGrow: 1, fontWeight: '700' }}>
-                {currentView === 'exclusivityform' ? 'Exclusivity Form' :
-                 currentView === 'nbfiexclusivityform' ? 'NBFI Exclusivity Form' :
+                {currentView === 'exclusivityform' && user?.businessUnit === 'NBFI' && user?.role !== 'admin' ? 'NBFI Exclusivity Form' :
+                 currentView === 'exclusivityform' ? 'Exclusivity Form' :
                  currentView === 'itemmaintenance' ? 'Item Maintenance' :
                  currentView === 'storemaintenance' ? 'Store Maintenance' :
                  currentView === 'usermanagement' ? 'User Management' :
