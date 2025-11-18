@@ -551,23 +551,39 @@ router.get('/nbfi/stores', async (req, res) => {
 
     const [rows] = await pool.execute(query, params);
 
-    // Get excluded items for each branch from nbfi_item_exclusivity_list
-    // The exclusivity list now contains per-item flags for store types: SM, RDS, WDS.
-    const allowedTypes = ['SM', 'RDS', 'WDS'];
+    // Determine table based on chain parameter
+    const chainUpper = String(chain).trim().toUpperCase();
+    const allowedChains = ['SM', 'RDS', 'WDS'];
+    const tableName = allowedChains.includes(chainUpper) 
+      ? `nbfi_${chainUpper.toLowerCase()}_item_exclusivity_list`
+      : 'nbfi_sm_item_exclusivity_list'; // fallback to SM
+
+    // Verify table exists
+    const [tableCheck] = await pool.execute(
+      `SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?`,
+      [tableName]
+    );
+    
+    if (!Array.isArray(tableCheck) || tableCheck.length === 0) {
+      return res.status(500).json({ error: `Table ${tableName} not found` });
+    }
+
+    // Get excluded items for each branch from the chain-specific exclusivity table
+    // The exclusivity list now contains per-item flags for store classes: ASEH, BSH, CSM, DSS, ESES.
+    const allowedTypes = ['ASEH', 'BSH', 'CSM', 'DSS', 'ESES'];
     const branchesWithExclusions = await Promise.all(rows.map(async (branch) => {
-      // Determine store type column to check. Prefer storeClassification (from exclusivity_list join),
-      // fall back to categoryClass or derive from storeName if necessary.
-      let storeType = (branch.storeClassification || branch.categoryClass || '') + '';
+      // Determine store type column to check using storeClass parameter or storeClassification from row
+      let storeType = (branch.storeClassification || storeClass || '') + '';
       storeType = String(storeType).trim().toUpperCase();
       if (!allowedTypes.includes(storeType)) {
-        // fallback heuristic: prefer 'SM' as default
-        storeType = 'SM';
+        // fallback heuristic: prefer 'ASEH' as default
+        storeType = 'ASEH';
       }
 
-      // Ensure column exists in nbfi_item_exclusivity_list
+      // Ensure column exists in the chain-specific table
       const [colCheck] = await pool.execute(
-        `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'nbfi_item_exclusivity_list' AND COLUMN_NAME = ?`,
-        [storeType]
+        `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?`,
+        [tableName, storeType]
       );
       if (!Array.isArray(colCheck) || colCheck.length === 0) {
         // If column missing, return empty exclusions for this branch (safe fallback)
@@ -578,7 +594,7 @@ router.get('/nbfi/stores', async (req, res) => {
         };
       }
 
-      const query = `SELECT itemCode FROM nbfi_item_exclusivity_list WHERE \`${storeType}\` = 1`;
+      const query = `SELECT itemCode FROM ${tableName} WHERE \`${storeType}\` = 1`;
       const [exclusions] = await pool.execute(query);
 
       return {
@@ -611,7 +627,7 @@ router.get('/nbfi/items', async (req, res) => {
     const query = `
       SELECT itemCode, itemDescription
       FROM nbfi_item_list
-      WHERE LOWER(itemCategory) = LOWER(?)
+      WHERE LOWER(itemBrand) = LOWER(?)
       ORDER BY itemCode ASC
     `;
     const [rows] = await pool.execute(query, [category]);
@@ -623,6 +639,70 @@ router.get('/nbfi/items', async (req, res) => {
   }
 });
 
+// GET /api/filters/nbfi/exclusivity-items - Fetch items with exclusivity based on chain, brand, and storeClass
+router.get('/nbfi/exclusivity-items', async (req, res) => {
+  try {
+    let { chain, storeClass, category } = req.query;
+    if (!chain || !storeClass || !category) {
+      return res.status(400).json({ error: 'Missing required parameters: chain, storeClass, and category are required' });
+    }
+
+    chain = String(chain).trim().toUpperCase();
+    storeClass = String(storeClass).trim().toUpperCase();
+    const brand = String(category).trim();
+
+    const allowedChains = ['SM', 'RDS', 'WDS'];
+    const allowedStoreClasses = ['ASEH', 'BSH', 'CSM', 'DSS', 'ESES'];
+
+    if (!allowedChains.includes(chain)) {
+      return res.status(400).json({ error: `Invalid chain. Must be one of: ${allowedChains.join(', ')}` });
+    }
+
+    if (!allowedStoreClasses.includes(storeClass)) {
+      return res.status(400).json({ error: `Invalid storeClass. Must be one of: ${allowedStoreClasses.join(', ')}` });
+    }
+
+    console.log('GET /filters/nbfi/exclusivity-items', { chain, storeClass, brand });
+
+    const pool = getPool();
+    const tableName = `nbfi_${chain.toLowerCase()}_item_exclusivity_list`;
+
+    // Verify table exists
+    const [tableCheck] = await pool.execute(
+      `SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?`,
+      [tableName]
+    );
+
+    if (!Array.isArray(tableCheck) || tableCheck.length === 0) {
+      return res.status(400).json({ error: `Table ${tableName} not found` });
+    }
+
+    // Fetch items from nbfi_item_list filtered by brand, then join with chain-specific exclusivity table
+    const query = `
+      SELECT DISTINCT i.itemCode, i.itemDescription, i.itemBrand
+      FROM nbfi_item_list i
+      INNER JOIN ${tableName} e ON i.itemCode = e.itemCode
+      WHERE LOWER(i.itemBrand) = LOWER(?)
+        AND e.\`${storeClass}\` = 1
+      ORDER BY i.itemCode ASC
+    `;
+
+    const [rows] = await pool.execute(query, [brand]);
+
+    res.json({
+      items: rows.map(r => ({
+        itemCode: r.itemCode,
+        itemDescription: r.itemDescription,
+        itemBrand: r.itemBrand,
+        quantity: 0
+      }))
+    });
+  } catch (err) {
+    console.error('GET /filters/nbfi/exclusivity-items error:', err);
+    res.status(500).json({ error: 'Failed to fetch NBFI exclusivity items' });
+  }
+});
+
 // GET /api/filters/nbfi/items-for-assignment
 router.get('/nbfi/items-for-assignment', async (req, res) => {
   try {
@@ -631,52 +711,45 @@ router.get('/nbfi/items-for-assignment', async (req, res) => {
       return res.status(400).json({ error: 'Missing required parameters: chain, storeClass, and category are required' });
     }
 
-    chain = String(chain).trim();
-    storeClass = String(storeClass).trim();
-    category = String(category).trim();
+    chain = String(chain).trim().toUpperCase();
+    storeClass = String(storeClass).trim().toUpperCase();
+    const brand = String(category).trim();
 
-    const columnName = `${chain}${storeClass}`;
-    const categoryLower = category.toLowerCase();
+    const allowedChains = ['SM', 'RDS', 'WDS'];
+    const allowedStoreClasses = ['ASEH', 'BSH', 'CSM', 'DSS', 'ESES'];
 
-    console.log(`\n================================`);
-    console.log(`GET /filters/nbfi/items-for-assignment`);
-    console.log(`Chain: ${chain}, StoreClass: ${storeClass}, Category: ${category}`);
-    console.log(`Column name: ${columnName}`);
-    console.log(`================================\n`);
+    if (!allowedChains.includes(chain)) {
+      return res.status(400).json({ error: `Invalid chain. Must be one of: ${allowedChains.join(', ')}` });
+    }
+
+    if (!allowedStoreClasses.includes(storeClass)) {
+      return res.status(400).json({ error: `Invalid storeClass. Must be one of: ${allowedStoreClasses.join(', ')}` });
+    }
+
+    console.log('GET /filters/nbfi/items-for-assignment', { chain, storeClass, brand });
 
     const pool = getPool();
+    const tableName = `nbfi_${chain.toLowerCase()}_item_exclusivity_list`;
 
-    // Get total items in category
-    const [totalItems] = await pool.execute(
-      `SELECT DISTINCT itemCode, itemDescription FROM nbfi_item_list WHERE LOWER(itemCategory) = ?`,
-      [categoryLower]
-    );
-    console.log(`Total DISTINCT items in nbfi_item_list for category '${categoryLower}': ${totalItems.length}`);
-
-    // Get available items (not assigned to this combination)
+    // Get available items (not assigned to this chain+storeClass combination)
     const query = `
-      SELECT DISTINCT i.itemCode, i.itemDescription, i.itemCategory, e.${columnName} as columnValue, e.itemCode as existsInExclusivity
+      SELECT DISTINCT i.itemCode, i.itemDescription, i.itemBrand
       FROM nbfi_item_list i
-      LEFT JOIN nbfi_store_exclusivity_list e ON i.itemCode = e.itemCode
-      WHERE LOWER(i.itemCategory) = ? 
-        AND (e.itemCode IS NULL OR e.${columnName} IS NULL OR e.${columnName} != 1)
+      LEFT JOIN ${tableName} e ON i.itemCode = e.itemCode
+      WHERE LOWER(i.itemBrand) = LOWER(?)
+        AND (e.itemCode IS NULL OR e.\`${storeClass}\` IS NULL OR e.\`${storeClass}\` != 1)
       ORDER BY i.itemCode ASC
     `;
 
-    const [rows] = await pool.execute(query, [categoryLower]);
-    
-    console.log(`Available items returned: ${rows.length}`);
-    console.log(`================================\n`);
-    
-    const response = {
+    const [rows] = await pool.execute(query, [brand]);
+
+    res.json({
       items: rows.map(r => ({
         itemCode: r.itemCode,
         itemDescription: r.itemDescription,
-        itemCategory: r.itemCategory
+        itemBrand: r.itemBrand
       }))
-    };
-
-    res.json(response);
+    });
   } catch (err) {
     console.error('GET /filters/nbfi/items-for-assignment error:', err);
     res.status(500).json({ error: 'Failed to fetch NBFI items for assignment' });

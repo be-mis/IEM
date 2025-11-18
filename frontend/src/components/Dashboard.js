@@ -25,7 +25,9 @@ import { useCategories, useChains, useStoreClasses } from '../hooks/useFilter';
 import ExclusivityForm from '../components/ExclusivityForm';
 import NBFIExclusivityForm from '../components/NBFIExclusivityForm';
 import ItemMaintenance from '../components/ItemMaintenance';
+import NBFIItemMaintenance from '../components/NBFIItemMaintenance';
 import StoreMaintenance from '../components/StoreMaintenance';
+import NBFIStoreMaintenance from '../components/NBFIStoreMaintenance';
 import AuditLogs from '../components/AuditLogs';
 import UserMaintenance from '../components/UserMaintenance';
 
@@ -155,17 +157,6 @@ const Dashboard = () => {
     }
   }, [location.pathname, user]);
 
-  // Redirect non-EPC users away from EPC-only pages (excluding exclusivity form which is for all)
-  useEffect(() => {
-    const hasEpcAccess = user?.role === 'admin' || user?.businessUnit === 'EPC';
-    const epcOnlyViews = ['itemmaintenance', 'storemaintenance'];
-    
-    if (!hasEpcAccess && epcOnlyViews.includes(currentView)) {
-      // Redirect to exclusivity form for non-EPC users
-      navigate('/exclusivity-form');
-    }
-  }, [currentView, user, navigate]);
-
   // Hooks
   // const { items, loading: itemsLoading, error, addItem, deleteItem, updateItem, checkOutItem, checkInItem } = useInventoryItems();
   // const { stats } = useDashboardStats();
@@ -243,7 +234,9 @@ const Dashboard = () => {
   const allMenuItems = [
     { text: 'Exclusivity Form', icon: <DescriptionOutlined />, view: 'exclusivityform', path: '/exclusivity-form' },
     { text: 'Item Maintenance', icon: <Inventory2Outlined />, view: 'itemmaintenance', path: '/item-maintenance', epcOnly: true },
+    { text: 'Item Maintenance', icon: <Inventory2Outlined />, view: 'itemmaintenance', path: '/item-maintenance', nbfiOnly: true },
     { text: 'Store Maintenance', icon: <StoreMallDirectoryOutlined />, view: 'storemaintenance', path: '/store-maintenance', epcOnly: true },
+    { text: 'Store Maintenance', icon: <StoreMallDirectoryOutlined />, view: 'storemaintenance', path: '/store-maintenance', nbfiOnly: true },
     { text: 'User Management', icon: <PeopleIcon />, view: 'usermanagement', adminOnly: true, path: '/user-management' },
     { text: 'Audit Logs', icon: <HistoryIcon />, view: 'auditlogs', adminOnly: true, path: '/audit-logs' },
     // { text: 'View Items', icon: <ViewListIcon />, view: 'view' },
@@ -389,27 +382,36 @@ const Dashboard = () => {
   const renderCurrentView = () => {
     // Helper function to check if user has access to EPC-only pages
     const hasEpcAccess = user?.role === 'admin' || user?.businessUnit === 'EPC';
+    const hasNbfiAccess = user?.role === 'admin' || user?.businessUnit === 'NBFI';
 
     switch (currentView) {
       case 'itemmaintenance':
-        if (!hasEpcAccess) {
+        // Show appropriate component based on business unit
+        if (user?.businessUnit === 'NBFI' && user?.role !== 'admin') {
+          return <NBFIItemMaintenance />;
+        } else if (hasEpcAccess) {
+          return <ItemMaintenance />;
+        } else {
           return (
             <MuiAlert severity="warning">
-              You don't have permission to access Item Maintenance. EPC business unit access required.
+              You don't have permission to access Item Maintenance.
             </MuiAlert>
           );
         }
-        return <ItemMaintenance />;
       
       case 'storemaintenance':
-        if (!hasEpcAccess) {
+        // Show appropriate component based on business unit
+        if (user?.businessUnit === 'NBFI' && user?.role !== 'admin') {
+          return <NBFIStoreMaintenance />;
+        } else if (hasEpcAccess) {
+          return <StoreMaintenance />;
+        } else {
           return (
             <MuiAlert severity="warning">
-              You don't have permission to access Store Maintenance. EPC business unit access required.
+              You don't have permission to access Store Maintenance.
             </MuiAlert>
           );
         }
-        return <StoreMaintenance />;
       
       case 'usermanagement':
         if (user?.role !== 'admin') {

@@ -1400,12 +1400,29 @@ router.post('/nbfi/add-exclusivity-items', verifyToken, async (req, res) => {
       skipped: []
     };
 
-    // New schema: nbfi_item_exclusivity_list contains per-item flags for store types: SM, RDS, WDS.
-    // Expect callers to provide either a `storeType` field (SM|RDS|WDS) per item or an overall
+    // New schema: chain-specific exclusivity tables contain per-item flags for store types: ASEH, BSH, CSM, DSS, ESES.
+    // Expect callers to provide either a `storeType` field (ASEH|BSH|CSM|DSS|ESES) per item or an overall
     // `storeType` in the request body. For backward compatibility, if only `storeCode` is given,
     // attempt to derive the storeType from `nbfi_stores.categoryClass`.
-    const allowedTypes = ['SM', 'RDS', 'WDS'];
+    const allowedTypes = ['ASEH', 'BSH', 'CSM', 'DSS', 'ESES'];
+    const allowedChains = ['SM', 'RDS', 'WDS'];
     const requestLevelStoreType = (req.body.storeType || req.body.category || '') + '';
+    const chain = String(req.body.chain || req.query.chain || 'SM').trim().toUpperCase();
+    
+    if (!allowedChains.includes(chain)) {
+      return res.status(400).json({ error: `Invalid chain. Must be one of: ${allowedChains.join(', ')}` });
+    }
+    
+    const tableName = `nbfi_${chain.toLowerCase()}_item_exclusivity_list`;
+    
+    // Verify table exists
+    const [tableCheck] = await pool.execute(
+      `SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?`,
+      [tableName]
+    );
+    if (!Array.isArray(tableCheck) || tableCheck.length === 0) {
+      return res.status(500).json({ error: `Table ${tableName} not found` });
+    }
 
     for (const item of items) {
       try {
@@ -1433,19 +1450,19 @@ router.post('/nbfi/add-exclusivity-items', verifyToken, async (req, res) => {
 
         // Ensure column exists
         const [colCheck] = await pool.execute(
-          `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'nbfi_item_exclusivity_list' AND COLUMN_NAME = ?`,
-          [storeType]
+          `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?`,
+          [tableName, storeType]
         );
         if (!Array.isArray(colCheck) || colCheck.length === 0) {
-          results.failed.push({ itemCode, storeCode: storeCode || null, reason: `Store type column ${storeType} not found in nbfi_item_exclusivity_list` });
+          results.failed.push({ itemCode, storeCode: storeCode || null, reason: `Store type column ${storeType} not found in ${tableName}` });
           continue;
         }
 
         // Try to update existing row; if none exists, insert
-        const updateQuery = `UPDATE nbfi_item_exclusivity_list SET \`${storeType}\` = '1', updated_at = CURRENT_TIMESTAMP WHERE itemCode = ?`;
+        const updateQuery = `UPDATE ${tableName} SET \`${storeType}\` = '1', updated_at = CURRENT_TIMESTAMP WHERE itemCode = ?`;
         const [updateRes] = await pool.execute(updateQuery, [itemCode]);
         if (updateRes.affectedRows === 0) {
-          const insertQuery = `INSERT INTO nbfi_item_exclusivity_list (itemCode, \`${storeType}\`) VALUES (?, '1')`;
+          const insertQuery = `INSERT INTO ${tableName} (itemCode, \`${storeType}\`) VALUES (?, '1')`;
           await pool.execute(insertQuery, [itemCode]);
           results.success.push({ itemCode, storeType, action: 'inserted' });
         } else {
@@ -1533,16 +1550,34 @@ router.post('/nbfi/add-exclusivity-items', verifyToken, async (req, res) => {
 router.post('/nbfi/remove-exclusivity-item', verifyToken, async (req, res) => {
   try {
     const pool = getPool();
-    // New schema: per-item flags exist in nbfi_item_exclusivity_list (SM/RDS/WDS columns)
-    const { itemCode, storeCode, storeType } = req.body;
+    // New schema: per-item flags exist in chain-specific exclusivity tables (ASEH/BSH/CSM/DSS/ESES columns)
+    const { itemCode, storeCode, storeType, chain: reqChain } = req.body;
 
-    console.log('🗑️ Remove NBFI exclusivity request:', { itemCode, storeCode, storeType });
+    console.log('🗑️ Remove NBFI exclusivity request:', { itemCode, storeCode, storeType, chain: reqChain });
 
     if (!itemCode) {
       return res.status(400).json({ error: 'itemCode is required' });
     }
+    
+    const allowedChains = ['SM', 'RDS', 'WDS'];
+    const chain = String(reqChain || req.query.chain || 'SM').trim().toUpperCase();
+    
+    if (!allowedChains.includes(chain)) {
+      return res.status(400).json({ error: `Invalid chain. Must be one of: ${allowedChains.join(', ')}` });
+    }
+    
+    const tableName = `nbfi_${chain.toLowerCase()}_item_exclusivity_list`;
+    
+    // Verify table exists
+    const [tableCheck] = await pool.execute(
+      `SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?`,
+      [tableName]
+    );
+    if (!Array.isArray(tableCheck) || tableCheck.length === 0) {
+      return res.status(500).json({ error: `Table ${tableName} not found` });
+    }
 
-    const allowedTypes = ['SM', 'RDS', 'WDS'];
+    const allowedTypes = ['ASEH', 'BSH', 'CSM', 'DSS', 'ESES'];
     let type = (storeType || '').toString().trim().toUpperCase();
     if (!type && storeCode) {
       // attempt to derive storeType from nbfi_stores.categoryClass
@@ -1558,14 +1593,14 @@ router.post('/nbfi/remove-exclusivity-item', verifyToken, async (req, res) => {
 
     // Ensure column exists
     const [colCheck] = await pool.execute(
-      `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'nbfi_item_exclusivity_list' AND COLUMN_NAME = ?`,
-      [type]
+      `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?`,
+      [tableName, type]
     );
     if (!Array.isArray(colCheck) || colCheck.length === 0) {
-      return res.status(400).json({ error: `Store type column ${type} not found in nbfi_item_exclusivity_list` });
+      return res.status(400).json({ error: `Store type column ${type} not found in ${tableName}` });
     }
 
-    const deleteQuery = `UPDATE nbfi_item_exclusivity_list SET \`${type}\` = NULL, updated_at = CURRENT_TIMESTAMP WHERE itemCode = ?`;
+    const deleteQuery = `UPDATE ${tableName} SET \`${type}\` = NULL, updated_at = CURRENT_TIMESTAMP WHERE itemCode = ?`;
     const [result] = await pool.execute(deleteQuery, [itemCode]);
 
     if (result.affectedRows === 0) {
@@ -1718,34 +1753,39 @@ router.post('/nbfi/mass-upload-exclusivity-items', verifyToken, upload.single('f
           continue;
         }
 
-        // Determine storeType for this store (SM|RDS|WDS) - attempt to derive from nbfi_stores.categoryClass
+        // Determine storeType for this store (ASEH|BSH|CSM|DSS|ESES) - attempt to derive from nbfi_stores.categoryClass
         const [storeRow] = await pool.execute(`SELECT categoryClass FROM nbfi_stores WHERE storeCode = ? LIMIT 1`, [storeCodeTrimmed]);
         let storeType = (Array.isArray(storeRow) && storeRow.length > 0) ? String(storeRow[0].categoryClass || '').trim().toUpperCase() : '';
-        const allowedTypes = ['SM','RDS','WDS'];
+        const allowedTypes = ['ASEH','BSH','CSM','DSS','ESES'];
         if (!allowedTypes.includes(storeType)) {
-          // fallback to request-level column or default to SM
+          // fallback to request-level column or default to ASEH
           storeType = (req.body.storeType || req.body.category || '').toString().trim().toUpperCase();
         }
         if (!allowedTypes.includes(storeType)) {
-          storeType = 'SM';
+          storeType = 'ASEH';
         }
 
+        // Determine chain for this upload (default to SM if not specified)
+        const allowedChains = ['SM', 'RDS', 'WDS'];
+        const chain = String(req.body.chain || req.query.chain || 'SM').trim().toUpperCase();
+        const tableName = allowedChains.includes(chain) ? `nbfi_${chain.toLowerCase()}_item_exclusivity_list` : 'nbfi_sm_item_exclusivity_list';
+        
         // Ensure column exists
         const [colCheck] = await pool.execute(
-          `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'nbfi_item_exclusivity_list' AND COLUMN_NAME = ?`,
-          [storeType]
+          `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?`,
+          [tableName, storeType]
         );
         if (!Array.isArray(colCheck) || colCheck.length === 0) {
           // Add column automatically if missing
-          await pool.execute(`ALTER TABLE nbfi_item_exclusivity_list ADD COLUMN \`${storeType}\` VARCHAR(10) NULL`);
+          await pool.execute(`ALTER TABLE ${tableName} ADD COLUMN \`${storeType}\` VARCHAR(10) NULL`);
         }
 
-        // Upsert into nbfi_item_exclusivity_list: set the storeType flag for this itemCode
-        const updateQuery = `UPDATE nbfi_item_exclusivity_list SET \`${storeType}\` = '1', updated_at = CURRENT_TIMESTAMP WHERE itemCode = ?`;
+        // Upsert into chain-specific exclusivity table: set the storeType flag for this itemCode
+        const updateQuery = `UPDATE ${tableName} SET \`${storeType}\` = '1', updated_at = CURRENT_TIMESTAMP WHERE itemCode = ?`;
         const [updateRes] = await pool.execute(updateQuery, [itemCodeTrimmed]);
         let action = 'updated';
         if (updateRes.affectedRows === 0) {
-          const insertQuery = `INSERT INTO nbfi_item_exclusivity_list (itemCode, \`${storeType}\`) VALUES (?, '1')`;
+          const insertQuery = `INSERT INTO ${tableName} (itemCode, \`${storeType}\`) VALUES (?, '1')`;
           await pool.execute(insertQuery, [itemCodeTrimmed]);
           action = 'inserted';
         }

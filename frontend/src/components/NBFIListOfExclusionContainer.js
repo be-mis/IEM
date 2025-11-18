@@ -14,11 +14,12 @@ export default function NBFIListOfExclusionContainer({ filters, quantities, onBr
   const { items: rawItems, loading: itLoading, error: itError } = useNBFIItems(filters);
 
   // Map API → component shape
+  // Start with empty excludedItemIds so users must manually add items (same as EPC behavior)
   const branches = useMemo(() => (rawBranches || []).map(b => ({
     id: b.id ?? b.branchCode,
     code: b.branchCode,
     name: b.branchName,
-    excludedItemIds: Array.isArray(b.excludedItemIds) ? b.excludedItemIds : [],
+    excludedItemIds: [], // Always start empty - user must manually add items
   })), [rawBranches]);
 
   // Filter items to only include those with quantity > 0
