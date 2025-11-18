@@ -201,7 +201,7 @@ export default function NBFIExclusivityForm() {
                   Exclusion
                 </SectionHeader>
               </AccordionSummary>
-              <AccordionDetails sx={{ maxHeight: 560 }}>
+              <AccordionDetails sx={{ overflow: 'hidden', maxHeight: 570 }}>
                 <NBFIListOfExclusionContainer 
                   filters={filters}
                   quantities={quantities}

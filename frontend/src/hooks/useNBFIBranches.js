@@ -54,12 +54,12 @@ export function useNBFIBranches(filters) {
       try {
         setLoading(true); 
         setError(null);
-        const res = await api.get(`/filters/nbfi/branches${query}`);
+        const res = await api.get(`/filters/nbfi/stores${query}`);
         if (cancelled) return;
 
-        console.log('=== NBFI BRANCH API RESPONSE ===');
-        console.log('First branch:', res.data?.items?.[0]);
-        console.log('All branches:', res.data?.items);
+        console.log('=== NBFI STORES API RESPONSE ===');
+        console.log('First store:', res.data?.items?.[0]);
+        console.log('All stores:', res.data?.items);
 
         setBranches(Array.isArray(res.data?.items) ? res.data.items : []);
 

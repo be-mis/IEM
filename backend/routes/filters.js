@@ -459,8 +459,8 @@ router.get('/nbfi/chains', async (req, res) => {
   }
 });
 
-// GET /api/filters/nbfi/branches (stores)
-router.get('/nbfi/branches', async (req, res) => {
+// GET /api/filters/nbfi/stores (stores)
+router.get('/nbfi/stores', async (req, res) => {
   try {
     let { chain, storeClass, category } = req.query;
     if (!chain || !storeClass || !category) {
@@ -471,7 +471,7 @@ router.get('/nbfi/branches', async (req, res) => {
     storeClass = String(storeClass).trim();
     category = String(category).trim().toUpperCase();
 
-    console.log('GET /filters/nbfi/branches', { chain, storeClass, category });
+    console.log('GET /filters/nbfi/stores', { chain, storeClass, category });
 
     // Build brand column name from category (brand code)
     const sanitize = (s) => String(s || '').trim().replace(/\s+/g, '_').replace(/[^A-Za-z0-9_]/g, '').toLowerCase();
@@ -479,24 +479,77 @@ router.get('/nbfi/branches', async (req, res) => {
 
     const pool = getPool();
 
-    // Ensure column exists
-    const [colCheck] = await pool.execute(`SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'nbfi_store_exclusivity_list' AND COLUMN_NAME = ?`, [brandCol]);
-    if (!Array.isArray(colCheck) || colCheck.length === 0) {
-      return res.status(400).json({ error: `Invalid brand '${category}' or brand column not found in nbfi_store_exclusivity_list` });
+    // Prefer checking brand column on `nbfi_stores` (we no longer rely on nbfi_store_exclusivity_list)
+    const [colInfo] = await pool.execute(
+      `SELECT COLUMN_NAME, DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'nbfi_stores' AND COLUMN_NAME = ?`,
+      [brandCol]
+    );
+
+    if (!Array.isArray(colInfo) || colInfo.length === 0) {
+      return res.status(400).json({ error: `Invalid brand '${category}' or brand column not found in nbfi_stores` });
     }
 
-    // Join nbfi_stores with nbfi_store_exclusivity_list to filter by chain, brand column and store classification
-    const query = `
-      SELECT DISTINCT s.storeCode, s.storeName, s.chainCode, e.storeClassification
-      FROM nbfi_stores s
-      INNER JOIN nbfi_store_exclusivity_list e ON s.storeCode = e.storeCode
-      WHERE s.chainCode = ?
-        AND e.\`${brandCol}\` = 1
-        AND e.storeClassification = ?
-      ORDER BY s.storeCode ASC
-    `;
+    const dataType = (colInfo[0].DATA_TYPE || '').toLowerCase();
 
-    const [rows] = await pool.execute(query, [chain, storeClass]);
+    // Detect whether nbfi_stores has a storeClassification column (it may not)
+    const [scCol] = await pool.execute(
+      `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'nbfi_stores' AND COLUMN_NAME = 'storeClassification'`
+    );
+    const hasStoreClassification = Array.isArray(scCol) && scCol.length > 0;
+
+    // Build SQL depending on column type and whether storeClassification exists
+    let query;
+    let params;
+    const numericTypes = new Set(['tinyint', 'int', 'smallint', 'mediumint', 'bigint', 'bit', 'boolean']);
+
+    if (numericTypes.has(dataType)) {
+      // numeric flag: check the brand flag directly on nbfi_stores
+      if (hasStoreClassification) {
+        query = `
+          SELECT DISTINCT s.storeCode, s.storeName, s.chainCode, s.storeClassification
+          FROM nbfi_stores s
+          WHERE s.chainCode = ?
+            AND s.\`${brandCol}\` = 1
+            AND s.storeClassification = ?
+          ORDER BY s.storeCode ASC
+        `;
+        params = [chain, storeClass];
+      } else {
+        // If storeClassification column is missing, omit that filter and return NULL for classification
+        query = `
+          SELECT DISTINCT s.storeCode, s.storeName, s.chainCode, NULL AS storeClassification
+          FROM nbfi_stores s
+          WHERE s.chainCode = ?
+            AND s.\`${brandCol}\` = 1
+          ORDER BY s.storeCode ASC
+        `;
+        params = [chain];
+      }
+    } else {
+      // text column: expect the column to contain the storeClass code (e.g. 'ASEH')
+      if (hasStoreClassification) {
+        query = `
+          SELECT DISTINCT s.storeCode, s.storeName, s.chainCode, s.storeClassification
+          FROM nbfi_stores s
+          WHERE s.chainCode = ?
+            AND (s.\`${brandCol}\` = ? OR s.\`${brandCol}\` = '1')
+            AND (s.storeClassification = ? OR s.storeClassification IS NULL)
+          ORDER BY s.storeCode ASC
+        `;
+        params = [chain, storeClass, storeClass];
+      } else {
+        query = `
+          SELECT DISTINCT s.storeCode, s.storeName, s.chainCode, NULL AS storeClassification
+          FROM nbfi_stores s
+          WHERE s.chainCode = ?
+            AND (s.\`${brandCol}\` = ? OR s.\`${brandCol}\` = '1')
+          ORDER BY s.storeCode ASC
+        `;
+        params = [chain, storeClass];
+      }
+    }
+
+    const [rows] = await pool.execute(query, params);
 
     // Get excluded items for each branch from nbfi_item_exclusivity_list
     // The exclusivity list now contains per-item flags for store types: SM, RDS, WDS.
@@ -537,8 +590,8 @@ router.get('/nbfi/branches', async (req, res) => {
 
     res.json({ items: branchesWithExclusions });
   } catch (err) {
-    console.error('GET /filters/nbfi/branches error:', err);
-    res.status(500).json({ error: 'Failed to fetch NBFI branches' });
+    console.error('GET /filters/nbfi/stores error:', err);
+    res.status(500).json({ error: 'Failed to fetch NBFI stores' });
   }
 });
 
@@ -630,8 +683,8 @@ router.get('/nbfi/items-for-assignment', async (req, res) => {
   }
 });
 
-// GET /api/filters/nbfi/available-branches
-router.get('/nbfi/available-branches', async (req, res) => {
+// GET /api/filters/nbfi/available-stores
+router.get('/nbfi/available-stores', async (req, res) => {
   try {
     let { chain, category } = req.query;
     if (!chain || !category) {
@@ -654,7 +707,7 @@ router.get('/nbfi/available-branches', async (req, res) => {
       return res.status(400).json({ error: `Invalid category. Must be one of: ${Object.keys(validColumns).join(', ')}` });
     }
 
-    console.log('GET /filters/nbfi/available-branches', { chain, category });
+    console.log('GET /filters/nbfi/available-stores', { chain, category });
 
     const pool = getPool();
     const query = `
@@ -674,8 +727,8 @@ router.get('/nbfi/available-branches', async (req, res) => {
       }))
     });
   } catch (err) {
-    console.error('GET /filters/nbfi/available-branches error:', err);
-    res.status(500).json({ error: 'Failed to fetch NBFI available branches' });
+    console.error('GET /filters/nbfi/available-stores error:', err);
+    res.status(500).json({ error: 'Failed to fetch NBFI available stores' });
   }
 });
 

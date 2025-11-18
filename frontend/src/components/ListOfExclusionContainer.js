@@ -77,6 +77,7 @@ export default function ListOfExclusionContainer({ filters, quantities, onBranch
 
   return (
     <ListOfExclusion 
+      sx={{overflow: 'hidden'}}
       branches={branches} 
       items={items} 
       onBranchesChange={onBranchesChange}

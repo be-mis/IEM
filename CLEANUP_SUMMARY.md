@@ -228,6 +228,17 @@ After cleanup, test the following:
    - All features tested
    - Documentation complete
 
+## 🧭 NBFI Exclusivity Migration
+
+- **Migration applied:** `022_drop_nbfi_store_exclusivity_list.js` was run and the legacy table `nbfi_store_exclusivity_list` was dropped from the `item_exclusivity` database.
+- **Why:** The system now uses a canonical per-item exclusivity table `nbfi_item_exclusivity_list` (columns `SM`, `RDS`, `WDS`) and keeps store-level brand information on `nbfi_stores`.
+- **Code changes:** The backend handler `backend/routes/filters.js` (route `/api/filters/nbfi/stores`) was updated to:
+   - Validate brand columns against `nbfi_stores` instead of `nbfi_store_exclusivity_list`.
+   - Query `nbfi_stores` directly to return matching stores and avoid joins to the dropped table.
+   - Detect and handle the absence of `nbfi_stores.storeClassification` (omitting the filter when missing) to prevent runtime SQL errors.
+- **Verification:** Smoke tests were run against `/api/filters/nbfi/stores` and returned store rows with empty `excludedItemIds` where appropriate. No runtime exceptions remain related to the dropped table.
+
+
 ## ✨ Summary
 
 The IEM system has been successfully cleaned up with:

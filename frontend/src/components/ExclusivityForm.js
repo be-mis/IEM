@@ -201,7 +201,7 @@ export default function ExclusivityForm() {
                   Exclusion
                 </SectionHeader>
               </AccordionSummary>
-              <AccordionDetails sx={{ maxHeight: 560 }}>
+              <AccordionDetails sx={{ overflow: 'hidden', maxHeight: 570 }}>
                 <ListOfExclusionContainer 
                   filters={filters}
                   quantities={quantities}

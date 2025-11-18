@@ -432,7 +432,7 @@ export default function ListOfExclusion(props) {
         />
       </Box>
 
-      <TableContainer sx={{ maxheight: 400 }}>
+      <TableContainer sx={{ overflow: 'auto', maxHeight: 400 }}>
         <Table aria-label="Branch exclusions table" stickyHeader>
           <TableHead>
             <TableRow>

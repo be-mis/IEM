@@ -77,6 +77,7 @@ export default function NBFIListOfExclusionContainer({ filters, quantities, onBr
 
   return (
     <NBFIListOfExclusion 
+      sx={{overflow: 'hidden'}}
       branches={branches} 
       items={items} 
       onBranchesChange={onBranchesChange}

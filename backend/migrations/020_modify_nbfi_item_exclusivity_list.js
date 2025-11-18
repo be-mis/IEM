@@ -31,15 +31,16 @@ const up = async (pool) => {
       }
     }
 
-    // If a legacy per-store table exists, migrate distinct itemCodes into the list table
+    // If a legacy per-store table exists, migrate distinct itemCodes into the list table,
+    // then drop the legacy table. The canonical table will be `nbfi_item_exclusivity_list`.
     const [legacy] = await pool.execute("SHOW TABLES LIKE 'nbfi_item_exclusivity'");
     if (Array.isArray(legacy) && legacy.length > 0) {
-      console.log('Found legacy table nbfi_item_exclusivity — migrating itemCodes');
+      console.log('Found legacy table nbfi_item_exclusivity — migrating itemCodes into nbfi_item_exclusivity_list');
       // Insert distinct itemCodes (ignore duplicates)
       await pool.execute(`INSERT IGNORE INTO nbfi_item_exclusivity_list (itemCode)
         SELECT DISTINCT itemCode FROM nbfi_item_exclusivity`);
 
-      // Drop the legacy table
+      // Drop the legacy table since list table is now canonical
       await pool.execute('DROP TABLE IF EXISTS nbfi_item_exclusivity');
       console.log('Dropped legacy nbfi_item_exclusivity table');
     }
@@ -63,7 +64,7 @@ const up = async (pool) => {
 const down = async (pool) => {
   console.log('🔄 Rolling back migration: 020_modify_nbfi_item_exclusivity_list');
   try {
-    // Remove SM/RDS/WDS columns if present
+    // Remove SM/RDS/WDS columns from nbfi_item_exclusivity_list if present
     for (const c of ['SM','RDS','WDS']) {
       const [check] = await pool.execute(
         `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'nbfi_item_exclusivity_list' AND COLUMN_NAME = ?`,
@@ -75,18 +76,22 @@ const down = async (pool) => {
       }
     }
 
-    // Note: recreating the legacy per-store table with original data is not possible here
-    // because source mapping (storeCode→SM/RDS/WDS) is ambiguous. Create an empty legacy table
-    // to allow rollback of code that expects it.
-    await pool.execute(`CREATE TABLE IF NOT EXISTS nbfi_item_exclusivity (
-      id BIGINT PRIMARY KEY AUTO_INCREMENT,
-      storeCode VARCHAR(50) DEFAULT NULL,
-      itemCode VARCHAR(100) NOT NULL,
-      created_at TIMESTAMP NULL DEFAULT NULL,
-      updated_at TIMESTAMP NULL DEFAULT NULL
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+    // Also remove SM/RDS/WDS columns from legacy nbfi_item_exclusivity if it exists
+    const [legacyCheck] = await pool.execute("SHOW TABLES LIKE 'nbfi_item_exclusivity'");
+    if (Array.isArray(legacyCheck) && legacyCheck.length > 0) {
+      for (const c of ['SM','RDS','WDS']) {
+        const [checkLegacy] = await pool.execute(
+          `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'nbfi_item_exclusivity' AND COLUMN_NAME = ?`,
+          [c]
+        );
+        if (Array.isArray(checkLegacy) && checkLegacy.length > 0) {
+          await pool.execute(`ALTER TABLE nbfi_item_exclusivity DROP COLUMN \`${c}\``);
+          console.log(`Dropped column ${c} from nbfi_item_exclusivity`);
+        }
+      }
+    }
 
-    console.log('✅ Rollback 020 complete (legacy table recreated empty)');
+    console.log('✅ Rollback 020 complete');
   } catch (err) {
     console.error('❌ Rollback 020 failed:', err);
     throw err;

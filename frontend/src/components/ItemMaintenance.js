@@ -1388,7 +1388,7 @@ export default function ItemMaintenance() {
 
                 {/* Category Names */}
                 <Grid item xs={12} md={4}>
-                  <Paper sx={{ p: 2, height: '100%' }}>
+                  <Paper sx={{ p: 2, height: '100%', overflow: 'hidden' }}>
                     <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold', color: '#ed6c02' }}>
                       Category Names
                     </Typography>

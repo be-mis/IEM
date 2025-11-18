@@ -401,7 +401,7 @@ export default function ListOfExclusion(props) {
   }, []);
 
   return (
-    <Paper sx={{ width: '100%', overflow: 'hidden', maxHeight: 520 }}>
+    <Paper sx={{ width: '100%', overflow: 'hidden', maxHeight: 550 }}>
       {/* MAIN search (affects only the branch list, not the subtable) */}
       <Box sx={{ p: 2 }}>
         <TextField
@@ -432,7 +432,7 @@ export default function ListOfExclusion(props) {
         />
       </Box>
 
-      <TableContainer sx={{ maxheight: 400 }}>
+      <TableContainer sx={{ overflow: 'auto', maxHeight: 400 }}>
         <Table aria-label="Branch exclusions table" stickyHeader>
           <TableHead>
             <TableRow>
