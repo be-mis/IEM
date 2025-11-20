@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import useNBFIItems from '../hooks/useNBFIItems';
 import {
   Box, Paper, TextField, IconButton, Table, TableBody, TableContainer, TableHead,
   TableRow, TableCell, TablePagination, InputAdornment, Grid, Tooltip,
@@ -10,7 +11,7 @@ import {
   DeleteForever as DeleteForeverIcon, Add as AddIcon, CloudUpload as CloudUploadIcon,
   FileDownload as FileDownloadIcon
 } from '@mui/icons-material';
-import Filter from '../components/Filter';
+import NBFIFilter from '../components/NBFIFilter';
 import axios from 'axios';
 import * as XLSX from 'xlsx';
 
@@ -31,14 +32,22 @@ function createData(itemCode, description, quantity) {
 const rowKey = (r) => `${r.itemCode}|${r.description}`;
 
 export default function NBFIItemMaintenance() {
+  // Use the same hook as NBFIListOfItems for fetching items
   const [rowsState, setRowsState] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const [quantities, setQuantities] = useState({});
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
   const [filterValues, setFilterValues] = useState({
     chain: '',
-    category: '',
+    brand: '',
     storeClass: '',
     transaction: ''
+  });
+  const { items, loading, error } = useNBFIItems({
+    chain: filterValues.chain,
+    storeClass: filterValues.storeClass,
+    category: filterValues.brand
   });
   
   // Snackbar state for showing save feedback (consistent with ExclusivityForm)
@@ -47,10 +56,7 @@ export default function NBFIItemMaintenance() {
     message: '',
     severity: 'success' // 'success' | 'error' | 'info' | 'warning'
   });
-  const [search, setSearch] = useState('');
-  const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(10);
-  const [quantities, setQuantities] = useState({});
+  // (removed duplicate rowsPerPage and quantities declarations)
   
   // Pagination for added items table in modal
   const [addedItemsPage, setAddedItemsPage] = useState(0);
@@ -67,7 +73,7 @@ export default function NBFIItemMaintenance() {
   const [openCloseConfirmDialog, setOpenCloseConfirmDialog] = useState(false);
   const [addItemForm, setAddItemForm] = useState({
     chain: '',
-    category: '',
+    brand: '',
     storeClass: '',
     itemNumber: ''
   });
@@ -77,7 +83,7 @@ export default function NBFIItemMaintenance() {
   
   // Fetch data for dropdowns in add modal
   const [chains, setChains] = useState([]);
-  const [categories, setCategories] = useState([]);
+  const [brands, setBrands] = useState([]);
   const [storeClasses, setStoreClasses] = useState([]);
 
   // Mass Upload Modal states
@@ -87,65 +93,49 @@ export default function NBFIItemMaintenance() {
   const [uploadResults, setUploadResults] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
 
-  // Fetch items from API
-  const fetchItems = async () => {
-    const { chain, category, storeClass } = filterValues;
-    
-    // Only fetch if all required filters are selected
-    if (!chain || !category || !storeClass) {
-      setRowsState([]);
-      return;
-    }
 
-    try {
-      setLoading(true);
-      setError(null);
-      
-      const response = await axios.get(`${API_BASE_URL}/filters/nbfi/exclusivity-items`, {
-        params: {
-          chain,
-          category,
-          storeClass
+  // Transform and filter items as in NBFIListOfItems
+  const filteredRows = useMemo(() => {
+    if (!Array.isArray(items)) return [];
+    return items
+      .filter((it) => it.inExclusivity)
+      .map((it) => {
+        const itemCode = it.itemCode || '';
+        const description = it.itemDescription ?? it.description ?? '';
+        return createData(itemCode, description, 0);
+      });
+  }, [items]);
+
+  // Keep rowsState in sync for table rendering
+  useEffect(() => {
+    setRowsState(filteredRows);
+    setQuantities((prev) => {
+      const newQuantities = { ...prev };
+      filteredRows.forEach((r) => {
+        const key = rowKey(r);
+        if (!(key in newQuantities)) {
+          const n = Number(r.quantity);
+          newQuantities[key] = Number.isFinite(n) ? n : 0;
         }
       });
-
-      const items = response.data.items || [];
-      
-      // Transform API data to match table format
-      const transformedItems = items.map(item => 
-        createData(
-          item.itemCode,
-          item.itemDescription,
-          item.quantity || 0
-        )
-      );
-
-      setRowsState(transformedItems);
-      
-      // Initialize quantities
-      const newQuantities = Object.fromEntries(
-        transformedItems.map((r) => [rowKey(r), Number(r.quantity) ?? 0])
-      );
-      setQuantities(newQuantities);
-      
-    } catch (err) {
-      console.error('Error fetching items:', err);
-      setError(err.response?.data?.error || err.message || 'Failed to fetch items');
-      setRowsState([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Fetch items when filters change
-  useEffect(() => {
-    fetchItems();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filterValues.chain, filterValues.category, filterValues.storeClass]);
+      return newQuantities;
+    });
+    setPage(0);
+  }, [filteredRows]);
 
   // Handle filter changes (memoized to prevent infinite re-renders)
   const handleFilterChange = useCallback((filters) => {
-    setFilterValues(filters);
+    // Defensive: if chain changed, always clear brand and storeClass
+    setFilterValues(prev => {
+      if (prev.chain && prev.chain !== filters.chain) {
+        return {
+          ...filters,
+          brand: '',
+          storeClass: '',
+        };
+      }
+      return filters;
+    });
     setPage(0); // Reset to first page when filters change
   }, []);
 
@@ -158,14 +148,14 @@ export default function NBFIItemMaintenance() {
   useEffect(() => {
     const fetchDropdownData = async () => {
       try {
-        const [chainsRes, categoriesRes, storeClassesRes] = await Promise.all([
+        const [chainsRes, brandsRes, storeClassesRes] = await Promise.all([
           axios.get(`${API_BASE_URL}/filters/nbfi/chains`),
-          axios.get(`${API_BASE_URL}/filters/nbfi/categories`),
+          axios.get(`${API_BASE_URL}/filters/nbfi/brands`),
           axios.get(`${API_BASE_URL}/filters/nbfi/store-classes`)
         ]);
         
         setChains(chainsRes.data.items || []);
-        setCategories(categoriesRes.data.items || []);
+        setBrands(brandsRes.data.items || []);
         setStoreClasses(storeClassesRes.data.items || []);
       } catch (err) {
         console.error('Error fetching dropdown data:', err);
@@ -177,9 +167,9 @@ export default function NBFIItemMaintenance() {
 
   // Fetch available items based on selected filters in add modal
   const fetchAvailableItems = async () => {
-    const { chain, category, storeClass } = addItemForm;
+    const { chain, brand, storeClass } = addItemForm;
     
-    if (!chain || !category || !storeClass) {
+    if (!chain || !brand || !storeClass) {
       setAvailableItems([]);
       return;
     }
@@ -191,7 +181,7 @@ export default function NBFIItemMaintenance() {
       const response = await axios.get(`${API_BASE_URL}/filters/nbfi/items-for-assignment`, {
         params: {
           chain,
-          category,
+          brand,
           storeClass
         }
       });
@@ -208,34 +198,34 @@ export default function NBFIItemMaintenance() {
 
   // Fetch available items when form changes
   useEffect(() => {
-    if (addItemForm.chain && addItemForm.category && addItemForm.storeClass) {
+    if (addItemForm.chain && addItemForm.brand && addItemForm.storeClass) {
       fetchAvailableItems();
     } else {
       setAvailableItems([]);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [addItemForm.chain, addItemForm.category, addItemForm.storeClass]);
+  }, [addItemForm.chain, addItemForm.brand, addItemForm.storeClass]);
 
-  // Filter available items to exclude already added items with same chain, category, and storeClass
+  // Filter available items to exclude already added items with same chain, brand, and storeClass
   const filteredAvailableItems = useMemo(() => {
-    const { chain, category, storeClass } = addItemForm;
+    const { chain, brand, storeClass } = addItemForm;
     
-    if (!chain || !category || !storeClass) {
+    if (!chain || !brand || !storeClass) {
       return availableItems;
     }
 
-    // Get item codes that are already added with the same chain, category, and storeClass
+    // Get item codes that are already added with the same chain, brand, and storeClass
     const addedItemCodes = addedItems
       .filter(item => 
         item.chain === chain && 
-        item.category === category && 
+        item.brand === brand && 
         item.storeClass === storeClass
       )
       .map(item => item.itemCode);
 
     // Filter out already added items
     return availableItems.filter(item => !addedItemCodes.includes(item.itemCode));
-  }, [availableItems, addedItems, addItemForm.chain, addItemForm.category, addItemForm.storeClass]);
+  }, [availableItems, addedItems, addItemForm.chain, addItemForm.brand, addItemForm.storeClass]);
 
   // Ensure no background element retains focus when opening modals
   const blurActiveElement = () => {
@@ -351,9 +341,7 @@ export default function NBFIItemMaintenance() {
           message: `Successfully uploaded ${response.data.summary.success} item(s)!${response.data.summary.failed > 0 ? ` ${response.data.summary.failed} failed.` : ''}`,
           severity: response.data.summary.failed > 0 ? 'warning' : 'success'
         });
-        
-        // Refresh the items list
-        await fetchItems();
+        // No need to manually refresh, useNBFIItems will auto-refresh on filter change
       } else {
         setSnackbar({
           open: true,
@@ -375,22 +363,22 @@ export default function NBFIItemMaintenance() {
 
   const handleDownloadTemplate = () => {
     // Create a sample Excel template with actual data from dropdowns
-    const headers = ['Chain', 'Category', 'StoreClass', 'ItemCode'];
+    const headers = ['Chain', 'Brand', 'StoreClass', 'ItemCode'];
     const sampleData = [];
     
     // Add sample rows using actual names from the dropdown data
-    if (chains.length > 0 && categories.length > 0 && storeClasses.length > 0) {
+    if (chains.length > 0 && brands.length > 0 && storeClasses.length > 0) {
       sampleData.push({
         'Chain': chains[0]?.chainName || 'Chain Name',
-        'Category': categories[0]?.category || 'Category Name',
+        'Brand': brands[0]?.brand || brands[0]?.category || 'Brand Name',
         'StoreClass': storeClasses[0]?.storeClassification || 'Store Classification',
         'ItemCode': 'ITEM001'
       });
       
-      if (chains.length > 1 && categories.length > 1 && storeClasses.length > 1) {
+      if (chains.length > 1 && brands.length > 1 && storeClasses.length > 1) {
         sampleData.push({
           'Chain': chains[1]?.chainName || 'Chain Name',
-          'Category': categories[1]?.category || 'Category Name',
+          'Brand': brands[1]?.brand || brands[1]?.category || 'Brand Name',
           'StoreClass': storeClasses[1]?.storeClassification || 'Store Classification',
           'ItemCode': 'ITEM002'
         });
@@ -399,13 +387,13 @@ export default function NBFIItemMaintenance() {
       // Fallback if data not loaded
       sampleData.push({
         'Chain': 'Chain Name',
-        'Category': 'Category Name',
+        'Brand': 'Brand Name',
         'StoreClass': 'Store Classification',
         'ItemCode': 'ITEM001'
       });
       sampleData.push({
         'Chain': 'Chain Name',
-        'Category': 'Category Name',
+        'Brand': 'Brand Name',
         'StoreClass': 'Store Classification',
         'ItemCode': 'ITEM002'
       });
@@ -418,7 +406,7 @@ export default function NBFIItemMaintenance() {
     // Set column widths for better readability
     ws['!cols'] = [
       { wch: 25 }, // Chain
-      { wch: 20 }, // Category
+      { wch: 20 }, // Brand
       { wch: 30 }, // StoreClass
       { wch: 15 }  // ItemCode
     ];
@@ -461,7 +449,7 @@ export default function NBFIItemMaintenance() {
       const failedData = uploadResults.results.failed.map(item => ({
         'Row': item.row || 'N/A',
         'Chain': '', // User needs to fill this
-        'Category': '', // User needs to fill this
+        'Brand': '', // User needs to fill this
         'StoreClass': '', // User needs to fill this
         'ItemCode': item.itemCode || '',
         'Error Reason': item.reason || ''
@@ -475,7 +463,7 @@ export default function NBFIItemMaintenance() {
       ws['!cols'] = [
         { wch: 8 },  // Row
         { wch: 25 }, // Chain
-        { wch: 20 }, // Category
+        { wch: 20 }, // Brand
         { wch: 30 }, // StoreClass
         { wch: 20 }, // ItemCode
         { wch: 50 }  // Error Reason
@@ -512,7 +500,7 @@ export default function NBFIItemMaintenance() {
     setOpenAddModal(true);
     setAddItemForm({
       chain: '',
-      category: '',
+      brand: '',
       storeClass: '',
       itemNumber: ''
     });
@@ -520,7 +508,7 @@ export default function NBFIItemMaintenance() {
 
   const handleCloseAddModal = () => {
     // Check if there's any data in the form or added items
-    const hasFormData = addItemForm.chain || addItemForm.category || addItemForm.storeClass || addItemForm.itemNumber;
+    const hasFormData = addItemForm.chain || addItemForm.brand || addItemForm.storeClass || addItemForm.itemNumber;
     const hasAddedItems = addedItems.length > 0;
     
     if (hasFormData || hasAddedItems) {
@@ -539,7 +527,7 @@ export default function NBFIItemMaintenance() {
     setOpenAddModal(false);
     setAddItemForm({
       chain: '',
-      category: '',
+      brand: '',
       storeClass: '',
       itemNumber: ''
     });
@@ -556,14 +544,14 @@ export default function NBFIItemMaintenance() {
       ...prev,
       [field]: value,
       // Reset dependent fields
-      ...(field === 'chain' && { category: '', storeClass: '', itemNumber: '' }),
-      ...(field === 'category' && { storeClass: '', itemNumber: '' }),
+      ...(field === 'chain' && { brand: '', storeClass: '', itemNumber: '' }),
+      ...(field === 'brand' && { storeClass: '', itemNumber: '' }),
       ...(field === 'storeClass' && { itemNumber: '' })
     }));
   };
 
   const handleAddItemToList = () => {
-    if (!addItemForm.chain || !addItemForm.category || !addItemForm.storeClass || !addItemForm.itemNumber) {
+    if (!addItemForm.chain || !addItemForm.brand || !addItemForm.storeClass || !addItemForm.itemNumber) {
       alert('Please fill all fields');
       return;
     }
@@ -580,7 +568,7 @@ export default function NBFIItemMaintenance() {
     // Check if item already added (this should not happen due to filtering, but kept as safety check)
     const isDuplicate = addedItems.some(
       item => item.chain === addItemForm.chain && 
-              item.category === addItemForm.category && 
+              item.brand === addItemForm.brand && 
               item.storeClass === addItemForm.storeClass && 
               item.itemCode === addItemForm.itemNumber
     );
@@ -592,14 +580,14 @@ export default function NBFIItemMaintenance() {
 
     // Find the descriptions for display
     const chainObj = chains.find(c => c.chainCode === addItemForm.chain);
-    const categoryObj = categories.find(c => c.category.toLowerCase() === addItemForm.category);
+    const brandObj = brands.find(c => (c.brand || c.category)?.toLowerCase() === addItemForm.brand);
     const storeClassObj = storeClasses.find(sc => sc.storeClassCode === addItemForm.storeClass);
 
     const newItem = {
       chain: addItemForm.chain, // Code for backend
       chainName: chainObj?.chainName || addItemForm.chain, // Name for display
-      category: addItemForm.category, // Code for backend
-      categoryName: categoryObj?.category || addItemForm.category, // Name for display
+      brand: addItemForm.brand, // Code for backend
+      brandName: brandObj?.brand || brandObj?.category || addItemForm.brand, // Name for display
       storeClass: addItemForm.storeClass, // Code for backend
       storeClassName: storeClassObj?.storeClassification || addItemForm.storeClass, // Name for display
       itemCode: selectedItem.itemCode,
@@ -613,7 +601,7 @@ export default function NBFIItemMaintenance() {
   const handleClearAddForm = () => {
     setAddItemForm({
       chain: '',
-      category: '',
+      brand: '',
       storeClass: '',
       itemNumber: ''
     });
@@ -624,24 +612,17 @@ export default function NBFIItemMaintenance() {
     if (!itemToDelete) return;
 
     try {
-      setLoading(true);
-      
       // Build column name from selected filters
       const columnName = `${filterValues.chain}${filterValues.storeClass}`;
-      
       console.log('🗑️ Deleting item:', itemToDelete.itemCode, 'Column:', columnName);
-
       // Call backend to remove NBFI exclusivity item
       const response = await axios.post(`${API_BASE_URL}/inventory/nbfi/remove-exclusivity-item`, {
         itemCode: itemToDelete.itemCode,
         chain: filterValues.chain,
         storeType: filterValues.storeClass
       });
-
       if (response.data.success) {
-        // Remove from local state only after successful backend update
         setAddedItems(prev => prev.filter(item => item.id !== itemId));
-        
         setSnackbar({
           open: true,
           message: 'Item removed successfully',
@@ -655,8 +636,6 @@ export default function NBFIItemMaintenance() {
         message: error.response?.data?.error || 'Failed to remove item',
         severity: 'error'
       });
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -666,58 +645,74 @@ export default function NBFIItemMaintenance() {
     }
 
     try {
-      setLoading(true);
-      setError(null);
-
-      // Transform added items to the format expected by the backend
-      const itemsToSave = addedItems.map(item => ({
-        chain: item.chain,
-        category: item.category,
-        storeClass: item.storeClass,
-        itemCode: item.itemCode
-      }));
-
-      const response = await axios.post(`${API_BASE_URL}/inventory/nbfi/add-exclusivity-items`, {
-        items: itemsToSave,
-        chain: itemsToSave[0]?.chain || ''
-      });
-
-      // Check response status
-      if (response.status === 200 || response.status === 207) {
-        const { summary, results } = response.data;
-        
-        // Show notification using Snackbar (consistent with ExclusivityForm)
-        if (summary.success > 0) {
-          const successMsg = `Successfully saved ${summary.success} item(s) to the database!${summary.failed > 0 ? ` ${summary.failed} item(s) failed.` : ''}`;
-          setSnackbar({
-            open: true,
-            message: successMsg,
-            severity: summary.failed > 0 ? 'warning' : 'success'
-          });
-        }
-
-        // Log any failures for debugging
-        if (results.failed && results.failed.length > 0) {
-          console.error('Failed items:', results.failed);
-        }
-
-        // Clear added items and close modal
-        setAddedItems([]);
-        setOpenAddModal(false);
-
-        // Refresh the items list to show newly added items
-        await fetchItems();
+      // Group items by unique (chain, brand, storeClass)
+      const grouped = {};
+      for (const item of addedItems) {
+        const key = `${item.chain}|${item.brand}|${item.storeClass}`;
+        if (!grouped[key]) grouped[key] = [];
+        grouped[key].push(item);
       }
+
+      let totalSuccess = 0;
+      let totalFailed = 0;
+      let failedItems = [];
+
+      for (const key in grouped) {
+        const group = grouped[key];
+        const itemsToSave = group.map(item => ({
+          chain: item.chain,
+          brand: item.brand,
+          storeClass: item.storeClass,
+          storeType: item.storeClass, // required by backend
+          itemCode: item.itemCode
+        }));
+        try {
+          const response = await axios.post(`${API_BASE_URL}/inventory/nbfi/add-exclusivity-items`, {
+            items: itemsToSave,
+            chain: itemsToSave[0]?.chain || ''
+          });
+          if (response.status === 200 || response.status === 207) {
+            const { summary, results } = response.data;
+            totalSuccess += summary.success || 0;
+            totalFailed += summary.failed || 0;
+            if (results && results.failed && results.failed.length > 0) {
+              failedItems = failedItems.concat(results.failed);
+            }
+          }
+        } catch (err) {
+          totalFailed += group.length;
+          failedItems = failedItems.concat(group.map(i => ({ itemCode: i.itemCode, reason: err.message })));
+        }
+      }
+
+      // Show summary notification
+      if (totalSuccess > 0) {
+        setSnackbar({
+          open: true,
+          message: `Successfully saved ${totalSuccess} item(s)!${totalFailed > 0 ? ` ${totalFailed} failed.` : ''}`,
+          severity: totalFailed > 0 ? 'warning' : 'success'
+        });
+      } else if (totalFailed > 0) {
+        setSnackbar({
+          open: true,
+          message: `Failed to save ${totalFailed} item(s).`,
+          severity: 'error'
+        });
+      }
+      if (failedItems.length > 0) {
+        console.error('Failed items:', failedItems);
+      }
+      // Clear added items and close modal
+      setAddedItems([]);
+      setOpenAddModal(false);
+      // No need to manually refresh, useNBFIItems will auto-refresh on filter change
     } catch (err) {
       console.error('Error saving items:', err);
-      // Show error notification
       setSnackbar({
         open: true,
         message: err.response?.data?.error || err.message || 'Failed to save items',
         severity: 'error'
       });
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -743,25 +738,19 @@ export default function NBFIItemMaintenance() {
 
   const handleConfirmDelete = async () => {
     try {
-      setLoading(true);
-      
       if (dialogMode === 'single' && selectedRow) {
         // Delete single row via backend
         const key = rowKey(selectedRow);
         const itemToDelete = rowsState.find(r => rowKey(r) === key);
-        
         if (itemToDelete) {
           // Build column name from selected filters
           const columnName = `${filterValues.chain}${filterValues.storeClass}`;
-          
           console.log('🗑️ Deleting single item:', itemToDelete.itemCode, 'Column:', columnName);
-
           const response = await axios.post(`${API_BASE_URL}/inventory/nbfi/remove-exclusivity-item`, {
             itemCode: itemToDelete.itemCode,
             chain: filterValues.chain,
             storeType: filterValues.storeClass
           });
-
           if (response.data.success) {
             setRowsState((prev) => prev.filter((r) => rowKey(r) !== key));
             setSelectedRows((prev) => {
@@ -769,7 +758,6 @@ export default function NBFIItemMaintenance() {
               newSet.delete(key);
               return newSet;
             });
-            
             setSnackbar({
               open: true,
               message: 'Item removed successfully',
@@ -780,15 +768,11 @@ export default function NBFIItemMaintenance() {
       } else if (dialogMode === 'multiple') {
         // Delete multiple rows via backend
         const itemsToDelete = rowsState.filter((r) => selectedRows.has(rowKey(r)));
-        
         // Build column name from selected filters
         const columnName = `${filterValues.chain}${filterValues.storeClass}`;
-        
         console.log('🗑️ Deleting', itemsToDelete.length, 'items, Column:', columnName);
-        
         let successCount = 0;
         let failCount = 0;
-
         for (const item of itemsToDelete) {
           try {
             const response = await axios.post(`${API_BASE_URL}/inventory/nbfi/remove-exclusivity-item`, {
@@ -796,7 +780,6 @@ export default function NBFIItemMaintenance() {
               chain: filterValues.chain,
               storeType: filterValues.storeClass
             });
-
             if (response.data.success) {
               successCount++;
             }
@@ -805,12 +788,10 @@ export default function NBFIItemMaintenance() {
             failCount++;
           }
         }
-
         // Update UI after all deletions
         if (successCount > 0) {
           setRowsState((prev) => prev.filter((r) => !selectedRows.has(rowKey(r))));
           setSelectedRows(new Set());
-          
           setSnackbar({
             open: true,
             message: `Successfully removed ${successCount} item(s)${failCount > 0 ? `, ${failCount} failed` : ''}`,
@@ -824,7 +805,6 @@ export default function NBFIItemMaintenance() {
           });
         }
       }
-      
       handleCloseDialog();
     } catch (error) {
       console.error('Error in handleConfirmDelete:', error);
@@ -834,8 +814,6 @@ export default function NBFIItemMaintenance() {
         severity: 'error'
       });
       handleCloseDialog();
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -914,12 +892,12 @@ export default function NBFIItemMaintenance() {
           <TuneOutlined />
           <strong>Parameter</strong>
         </Box>
-        <Filter onChange={handleFilterChange} hideTransaction={true} categoryLabel="Brand" isNBFI={true} />
+        <NBFIFilter onChange={handleFilterChange} hideTransaction={true} categoryLabel="Brand" />
       </Box>
 
       {/* Error Alert - Keep for fetch/display errors */}
       {error && (
-        <Alert severity="error" onClose={() => setError(null)}>
+        <Alert severity="error" onClose={() => setSnackbar(s => ({ ...s, open: false }))}>
           {error}
         </Alert>
       )}
@@ -956,7 +934,7 @@ export default function NBFIItemMaintenance() {
                 ) : null,
               }}
               sx={{ flex: 1, mr: 2 }}
-              disabled={!filterValues.chain || !filterValues.category || !filterValues.storeClass}
+              disabled={!filterValues.chain || !filterValues.brand || !filterValues.storeClass}
             />
 
             <Button
@@ -1062,8 +1040,8 @@ export default function NBFIItemMaintenance() {
               {pagedRows.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={columns.length} align="center">
-                    {!filterValues.chain || !filterValues.category || !filterValues.storeClass
-                      ? 'Please select Chain, Category, and Store Classification to view items.'
+                    {!filterValues.chain || !filterValues.brand || !filterValues.storeClass
+                      ? 'Please select Chain, Brand, and Store Classification to view items.'
                       : `No results found${search ? ` for "${search}"` : ''}.`}
                   </TableCell>
                 </TableRow>
@@ -1118,19 +1096,19 @@ export default function NBFIItemMaintenance() {
 
               <Grid item xs={12} md={6}>
                 <FormControl fullWidth size="small">
-                  <InputLabel>Category</InputLabel>
+                  <InputLabel>Brand</InputLabel>
                   <Select
-                    value={addItemForm.category}
-                    label="Category"
-                    onChange={handleAddItemFormChange('category')}
+                    value={addItemForm.brand}
+                    label="Brand"
+                    onChange={handleAddItemFormChange('brand')}
                     disabled={!addItemForm.chain}
                   >
                     <MenuItem value="">
-                      <em>Select Category</em>
+                      <em>Select Brand</em>
                     </MenuItem>
-                    {categories.map((cat) => (
-                      <MenuItem key={cat.catCode} value={cat.category.toLowerCase()}>
-                        {cat.category}
+                    {brands.map((b) => (
+                      <MenuItem key={b.catCode || b.brandCode} value={(b.brand || b.category).toLowerCase()}>
+                        {b.brand || b.category}
                       </MenuItem>
                     ))}
                   </Select>
@@ -1144,7 +1122,7 @@ export default function NBFIItemMaintenance() {
                     value={addItemForm.storeClass}
                     label="Store Classification"
                     onChange={handleAddItemFormChange('storeClass')}
-                    disabled={!addItemForm.category}
+                    disabled={!addItemForm.brand}
                   >
                     <MenuItem value="">
                       <em>Select Store Classification</em>
@@ -1207,7 +1185,7 @@ export default function NBFIItemMaintenance() {
                     color="primary"
                     fullWidth
                     onClick={handleAddItemToList}
-                    disabled={!addItemForm.chain || !addItemForm.category || !addItemForm.storeClass || !addItemForm.itemNumber}
+                    disabled={!addItemForm.chain || !addItemForm.brand || !addItemForm.storeClass || !addItemForm.itemNumber}
                   >
                     Add to List
                   </Button>
@@ -1232,7 +1210,7 @@ export default function NBFIItemMaintenance() {
                     <TableHead>
                       <TableRow>
                         <TableCell><strong>Chain</strong></TableCell>
-                        <TableCell><strong>Category</strong></TableCell>
+                        <TableCell><strong>Brand</strong></TableCell>
                         <TableCell><strong>Store Classification</strong></TableCell>
                         <TableCell><strong>Item Code</strong></TableCell>
                         <TableCell><strong>Item Name</strong></TableCell>
@@ -1245,7 +1223,7 @@ export default function NBFIItemMaintenance() {
                         .map((item) => (
                           <TableRow key={item.id}>
                             <TableCell>{item.chainName}</TableCell>
-                            <TableCell>{item.categoryName}</TableCell>
+                            <TableCell>{item.brandName}</TableCell>
                             <TableCell>{item.storeClassName}</TableCell>
                             <TableCell>{item.itemCode}</TableCell>
                             <TableCell>{item.itemName}</TableCell>
@@ -1357,9 +1335,9 @@ export default function NBFIItemMaintenance() {
               <Typography variant="body2">
                 Upload an Excel or CSV file.
                 <br />
-                <strong>Required columns:</strong> Chain, Category, StoreClass, and ItemCode.
+                <strong>Required columns:</strong> Chain, Brand, StoreClass, and ItemCode.
                 <br />
-                <strong>Note:</strong> Use the full names (not codes) for Chain, Category, and StoreClass.
+                <strong>Note:</strong> Use the full names (not codes) for Chain, Brand, and StoreClass.
               </Typography>
             </Alert>
 
@@ -1390,19 +1368,19 @@ export default function NBFIItemMaintenance() {
                   </Paper>
                 </Grid>
 
-                {/* Category Names */}
+                {/* Brand Names */}
                 <Grid item xs={12} md={4}>
                   <Paper sx={{ p: 2, height: '100%', overflow: 'hidden' }}>
                     <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold', color: '#ed6c02' }}>
-                      Category Names
+                      Brand Names
                     </Typography>
                     <Box sx={{ maxHeight: 150, overflow: 'auto' }}>
-                      {categories.map((cat) => (
-                        <Typography key={cat.catCode} variant="body2" sx={{ py: 0.5 }}>
-                          • <strong>{cat.category}</strong>
+                      {brands.map((cat, idx) => (
+                        <Typography key={cat.catCode || cat.brandCode || idx} variant="body2" sx={{ py: 0.5 }}>
+                          • <strong>{cat.brand || cat.category}</strong>
                         </Typography>
                       ))}
-                      {categories.length === 0 && (
+                      {brands.length === 0 && (
                         <Typography variant="body2" color="text.secondary">
                           Loading...
                         </Typography>
@@ -1437,7 +1415,7 @@ export default function NBFIItemMaintenance() {
                   <strong>Important:</strong> Use the full names (not codes) in your Excel file.
                   <br />
                   <strong>Example:</strong> Chain: <code>{chains[0]?.chainName || 'Chain Name'}</code>, 
-                  Category: <code>{categories[0]?.category || 'Category'}</code>, 
+                  Brand: <code>{brands[0]?.brand || brands[0]?.category || 'Brand'}</code>, 
                   StoreClass: <code>{storeClasses[0]?.storeClassification || 'Store Classification'}</code>
                 </Typography>
               </Alert>

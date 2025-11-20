@@ -32,15 +32,15 @@ export function useNBFIBranches(filters) {
   const shouldFetch = Boolean(
     (filters?.chain || '').trim() && 
     (filters?.storeClass || '').trim() &&
-    (filters?.category || '').trim()
+    (filters?.brand || '').trim()
   );
 
   // Only include non-empty filters in the URL
   const query = useMemo(() => toQuery({
     chain: filters?.chain,
-    category: filters?.category,
+    brand: filters?.brand,
     storeClass: filters?.storeClass,
-  }), [filters?.chain, filters?.category, filters?.storeClass]);
+  }), [filters?.chain, filters?.brand, filters?.storeClass]);
 
   useEffect(() => {
     let cancelled = false;

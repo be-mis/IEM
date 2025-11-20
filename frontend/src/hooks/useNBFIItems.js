@@ -55,8 +55,14 @@ export default function useNBFIItems({ chain, storeClass, category } = {}, debou
       setLoading(true);
       setError(null);
       try {
-        // Use exclusivity-items endpoint to get items already assigned to this chain+storeClass combination
-        const url = `/filters/nbfi/exclusivity-items${query}`;
+        // Use combined endpoint that returns items with inExclusivity flag
+        // Note: this hook receives `category` which, for NBFI flows, contains the brand
+        const params = new URLSearchParams({
+          chain: String(chain || '').trim(),
+          brand: String(category || '').trim(),
+          storeClass: String(storeClass || '').trim()
+        });
+        const url = `/filters/nbfi/items-with-exclusivity?${params.toString()}`;
         const res = await api.get(url, { signal: controller.signal });
         const dataItems = (res?.data?.items) || [];
         console.log(`Fetched NBFI Items from URL "${url}":`, dataItems);

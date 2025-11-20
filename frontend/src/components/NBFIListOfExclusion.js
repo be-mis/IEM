@@ -459,8 +459,8 @@ export default function ListOfExclusion(props) {
             {pagedBranches.length === 0 && (
               <TableRow>
                 <TableCell colSpan={4}>
-                  <Typography variant="body2" align="center">
-                    No branches found{debouncedSearch ? ` for "${debouncedSearch}"` : ''}.
+                  <Typography variant="body2" align="center" sx={{ color: 'text.secondary', fontStyle: 'italic' }}>
+                    No results found{debouncedSearch ? ` for "${debouncedSearch}"` : ''}.
                   </Typography>
                 </TableCell>
               </TableRow>

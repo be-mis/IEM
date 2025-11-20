@@ -5,7 +5,8 @@ const { connectDatabase, initializeDatabase } = require('./config/database');
 const { verifyEmailConfig } = require('./utils/emailService');
 const inventoryRoutes = require('./routes/inventory');
 const authRoutes = require('./routes/auth');
-const filtersRoutes = require('./routes/filters');
+const filtersEpcRoutes = require('./routes/filters_epc');
+const filtersNbfiRoutes = require('./routes/filters_nbfi');
 const dashboardRoutes = require('./routes/dashboard');
 const reportsRoutes = require('./routes/reports');
 const auditRoutes = require('./routes/audit');
@@ -46,7 +47,8 @@ app.get('/health', (req, res) => {
 // API Routes
 app.use('/api/inventory', inventoryRoutes);
 app.use('/api/auth', authRoutes);
-app.use('/api/filters', filtersRoutes);
+app.use('/api/filters', filtersEpcRoutes);
+app.use('/api/filters', filtersNbfiRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/reports', reportsRoutes);
 app.use('/api/audit', auditRoutes);

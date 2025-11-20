@@ -418,10 +418,17 @@ router.post('/add-exclusivity-items', verifyToken, async (req, res) => {
             userEmail: req.user?.email || req.email || null,
             ip: getIp(req),
             details: {
-              items: inserted.map(r => ({
-                itemCode: r.itemCode,
-                column: r.column
-              })),
+              items: inserted.map(r => {
+                const item = items.find(i => i.itemCode === r.itemCode);
+                return {
+                  itemCode: r.itemCode,
+                  column: r.column,
+                  chain: item?.chain,
+                  category: item?.category,
+                  storeClass: item?.storeClass,
+                  action: r.action
+                };
+              }),
               count: inserted.length
             }
           });
@@ -439,10 +446,17 @@ router.post('/add-exclusivity-items', verifyToken, async (req, res) => {
             userEmail: req.user?.email || req.email || null,
             ip: getIp(req),
             details: {
-              items: updated.map(r => ({
-                itemCode: r.itemCode,
-                column: r.column
-              })),
+              items: updated.map(r => {
+                const item = items.find(i => i.itemCode === r.itemCode);
+                return {
+                  itemCode: r.itemCode,
+                  column: r.column,
+                  chain: item?.chain,
+                  category: item?.category,
+                  storeClass: item?.storeClass,
+                  action: r.action
+                };
+              }),
               count: updated.length
             }
           });
@@ -1458,11 +1472,12 @@ router.post('/nbfi/add-exclusivity-items', verifyToken, async (req, res) => {
           continue;
         }
 
-        // Try to update existing row; if none exists, insert
+        // Try to update existing row; if none exists, insert with created_at
         const updateQuery = `UPDATE ${tableName} SET \`${storeType}\` = '1', updated_at = CURRENT_TIMESTAMP WHERE itemCode = ?`;
         const [updateRes] = await pool.execute(updateQuery, [itemCode]);
         if (updateRes.affectedRows === 0) {
-          const insertQuery = `INSERT INTO ${tableName} (itemCode, \`${storeType}\`) VALUES (?, '1')`;
+          // Always set created_at to NOW() for new inserts
+          const insertQuery = `INSERT INTO ${tableName} (itemCode, \`${storeType}\`, created_at) VALUES (?, '1', NOW())`;
           await pool.execute(insertQuery, [itemCode]);
           results.success.push({ itemCode, storeType, action: 'inserted' });
         } else {
@@ -1600,7 +1615,8 @@ router.post('/nbfi/remove-exclusivity-item', verifyToken, async (req, res) => {
       return res.status(400).json({ error: `Store type column ${type} not found in ${tableName}` });
     }
 
-    const deleteQuery = `UPDATE ${tableName} SET \`${type}\` = NULL, updated_at = CURRENT_TIMESTAMP WHERE itemCode = ?`;
+    // Set exclusivity value to 0 (never NULL) when removing
+    const deleteQuery = `UPDATE ${tableName} SET \`${type}\` = 0, updated_at = CURRENT_TIMESTAMP WHERE itemCode = ?`;
     const [result] = await pool.execute(deleteQuery, [itemCode]);
 
     if (result.affectedRows === 0) {
@@ -1887,42 +1903,29 @@ router.post('/nbfi/remove-exclusivity-branches', verifyToken, async (req, res) =
       return res.status(400).json({ error: 'Missing brand/category identifier in request body' });
     }
 
-    // Build sanitized brand column name and ensure it exists in nbfi_store_exclusivity_list
+
+    // Build sanitized brand column name and ensure it exists in nbfi_stores
     const sanitize = (s) => String(s || '').trim().replace(/\s+/g, '_').replace(/[^A-Za-z0-9_]/g, '').toLowerCase();
     const brandCol = `brand_${sanitize(brandInput)}`;
 
-    // Verify brand column exists in exclusivity list table
-    const [colCheck] = await pool.execute(
-      `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'nbfi_store_exclusivity_list' AND COLUMN_NAME = ?`,
+    // Verify brand column exists in nbfi_stores
+    const [colCheckStores] = await pool.execute(
+      `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'nbfi_stores' AND COLUMN_NAME = ?`,
       [brandCol]
     );
-    if (!Array.isArray(colCheck) || colCheck.length === 0) {
-      return res.status(400).json({ error: `Invalid brand '${brandInput}' or brand column not found in nbfi_store_exclusivity_list` });
+    if (!Array.isArray(colCheckStores) || colCheckStores.length === 0) {
+      return res.status(400).json({ error: `Invalid brand '${brandInput}' or brand column not found in nbfi_stores` });
     }
 
     for (const branchCode of branchCodes) {
       try {
-        // Unset the brand flag in nbfi_store_exclusivity_list for this store
-        const unsetExclusivityQuery = `
-          UPDATE nbfi_store_exclusivity_list
+        // Unset the brand flag in nbfi_stores for this store
+        const unsetStoreQuery = `
+          UPDATE nbfi_stores
           SET \`${brandCol}\` = NULL, updated_at = CURRENT_TIMESTAMP
           WHERE storeCode = ?
         `;
-        await pool.execute(unsetExclusivityQuery, [branchCode]);
-
-        // Also unset the brand flag in nbfi_stores if the column exists there
-        const [colCheckStores] = await pool.execute(
-          `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'nbfi_stores' AND COLUMN_NAME = ?`,
-          [brandCol]
-        );
-        if (Array.isArray(colCheckStores) && colCheckStores.length > 0) {
-          const unsetStoreQuery = `
-            UPDATE nbfi_stores
-            SET \`${brandCol}\` = NULL, updated_at = CURRENT_TIMESTAMP
-            WHERE storeCode = ?
-          `;
-          await pool.execute(unsetStoreQuery, [branchCode]);
-        }
+        await pool.execute(unsetStoreQuery, [branchCode]);
 
         // Optionally, keep existing behavior of deleting the store record entirely if required by callers.
         // If you still want to delete the store row, uncomment the following lines:
@@ -2025,56 +2028,32 @@ router.post('/nbfi/add-exclusivity-branches', verifyToken, async (req, res) => {
 
         const brandCol = `brand_${sanitize(brandInput)}`;
 
-        // Verify brand column exists in nbfi_store_exclusivity_list
-        const [colCheck] = await pool.execute(
-          `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'nbfi_store_exclusivity_list' AND COLUMN_NAME = ?`,
-          [brandCol]
-        );
-        if (!Array.isArray(colCheck) || colCheck.length === 0) {
-          results.failed.push({ storeCode, reason: `Invalid brand '${brandInput}' or brand column not found` });
-          continue;
-        }
 
-        // Upsert nbfi_stores (do not attempt to dynamically inject column names here)
-        const upsertQuery = `
-          INSERT INTO nbfi_stores (storeCode, storeName, chainCode, categoryClass)
-          VALUES (?, ?, ?, ?)
-          ON DUPLICATE KEY UPDATE
-            storeName = VALUES(storeName),
-            chainCode = VALUES(chainCode),
-            categoryClass = VALUES(categoryClass),
-            updated_at = CURRENT_TIMESTAMP
-        `;
-        await pool.execute(upsertQuery, [storeCode, storeName || '', chainCode || null, storeClassification || null]);
-
-        // Ensure a row exists in nbfi_store_exclusivity_list for this store
-        const [existRows] = await pool.execute(`SELECT id FROM nbfi_store_exclusivity_list WHERE storeCode = ?`, [storeCode]);
-        if (Array.isArray(existRows) && existRows.length > 0) {
-          // Update existing exclusivity row: set brand flag and optionally update storeClassification
-          const updateExcl = `
-            UPDATE nbfi_store_exclusivity_list
-            SET \`${brandCol}\` = '1', storeClassification = COALESCE(?, storeClassification), updated_at = CURRENT_TIMESTAMP
-            WHERE storeCode = ?
-          `;
-          await pool.execute(updateExcl, [storeClassification, storeCode]);
-        } else {
-          // Insert new exclusivity row (set brand flag)
-          const insertExcl = `
-            INSERT INTO nbfi_store_exclusivity_list (storeCode, storeClassification, \`${brandCol}\`)
-            VALUES (?, ?, '1')
-          `;
-          await pool.execute(insertExcl, [storeCode, storeClassification || null]);
-        }
-
-        // Also set brand flag in nbfi_stores if the column exists there
+        // Verify brand column exists in nbfi_stores
         const [colCheckStores] = await pool.execute(
           `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'nbfi_stores' AND COLUMN_NAME = ?`,
           [brandCol]
         );
-        if (Array.isArray(colCheckStores) && colCheckStores.length > 0) {
-          const setStore = `UPDATE nbfi_stores SET \`${brandCol}\` = '1', updated_at = CURRENT_TIMESTAMP WHERE storeCode = ?`;
-          await pool.execute(setStore, [storeCode]);
+        if (!Array.isArray(colCheckStores) || colCheckStores.length === 0) {
+          results.failed.push({ storeCode, reason: `Invalid brand '${brandInput}' or brand column not found in nbfi_stores` });
+          continue;
         }
+
+        // Only update the brand column to the classification value for the given storeCode
+        // Do not insert or update storeName/chainCode
+        // Check if store exists first
+        const [storeExistsRows] = await pool.execute(
+          'SELECT storeCode FROM nbfi_stores WHERE storeCode = ? LIMIT 1',
+          [storeCode]
+        );
+        if (!Array.isArray(storeExistsRows) || storeExistsRows.length === 0) {
+          results.failed.push({ storeCode, reason: `StoreCode '${storeCode}' does not exist in nbfi_stores.` });
+          continue;
+        }
+
+        // Update the brand column to the classification value
+        const setStore = `UPDATE nbfi_stores SET \`${brandCol}\` = ?, updated_at = CURRENT_TIMESTAMP WHERE storeCode = ?`;
+        await pool.execute(setStore, [storeClassification, storeCode]);
 
         results.success.push({ storeCode, storeName, chainCode, storeClassification, brand: brandInput });
 
@@ -2101,8 +2080,9 @@ router.post('/nbfi/add-exclusivity-branches', verifyToken, async (req, res) => {
               storeCode: r.storeCode,
               storeName: r.storeName,
               chainCode: r.chainCode,
-              categoryClass: r.categoryClass,
-              action: r.action
+              storeClassification: r.storeClassification,
+              brand: r.brand,
+              action: r.action || 'added'
             })),
             count: results.success.length
           }

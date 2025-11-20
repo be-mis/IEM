@@ -141,11 +141,23 @@ const Dashboard = () => {
   // Sync currentView with URL
   useEffect(() => {
     const path = location.pathname;
-    if (path.includes('exclusivity-form')) {
+    if (path === '/exclusivity-form/epc') {
+      setCurrentView('exclusivityform-epc');
+    } else if (path === '/exclusivity-form/nbfi') {
+      setCurrentView('exclusivityform-nbfi');
+    } else if (path.includes('exclusivity-form')) {
       setCurrentView('exclusivityform');
-    } else if (path.includes('item-maintenance')) {
+    } else if (path === '/item-maintenance/epc') {
+      setCurrentView('itemmaintenance-epc');
+    } else if (path === '/item-maintenance/nbfi') {
+      setCurrentView('itemmaintenance-nbfi');
+    } else if (path === '/store-maintenance/epc') {
+      setCurrentView('storemaintenance-epc');
+    } else if (path === '/store-maintenance/nbfi') {
+      setCurrentView('storemaintenance-nbfi');
+    } else if (path === '/item-maintenance') {
       setCurrentView('itemmaintenance');
-    } else if (path.includes('store-maintenance')) {
+    } else if (path === '/store-maintenance') {
       setCurrentView('storemaintenance');
     } else if (path.includes('user-management')) {
       setCurrentView('usermanagement');
@@ -232,46 +244,32 @@ const Dashboard = () => {
 
   // Update menuItems to include Disposal
   const allMenuItems = [
-    { text: 'Exclusivity Form', icon: <DescriptionOutlined />, view: 'exclusivityform', path: '/exclusivity-form' },
-    { text: 'Item Maintenance', icon: <Inventory2Outlined />, view: 'itemmaintenance', path: '/item-maintenance', epcOnly: true },
-    { text: 'Item Maintenance', icon: <Inventory2Outlined />, view: 'itemmaintenance', path: '/item-maintenance', nbfiOnly: true },
-    { text: 'Store Maintenance', icon: <StoreMallDirectoryOutlined />, view: 'storemaintenance', path: '/store-maintenance', epcOnly: true },
-    { text: 'Store Maintenance', icon: <StoreMallDirectoryOutlined />, view: 'storemaintenance', path: '/store-maintenance', nbfiOnly: true },
-    { text: 'User Management', icon: <PeopleIcon />, view: 'usermanagement', adminOnly: true, path: '/user-management' },
-    { text: 'Audit Logs', icon: <HistoryIcon />, view: 'auditlogs', adminOnly: true, path: '/audit-logs' },
-    // { text: 'View Items', icon: <ViewListIcon />, view: 'view' },
-    // { text: 'Assign', icon: <AssignIcon />, view: 'assign' },
-    // { text: 'Receive', icon: <ReceiveIcon />, view: 'receive' },
-    // { text: 'Reports', icon: <ReportsIcon />, view: 'reports' },
-    // { text: 'Disposal', icon: <DeleteForeverIcon />, view: 'disposal' },
+    // Admin: show all exclusivity/maintenance links explicitly
+    ...(user?.role === 'admin' ? [
+      { text: 'EPC Exclusivity Form', icon: <DescriptionOutlined />, view: 'exclusivityform-epc', path: '/exclusivity-form/epc', key: 'exclusivityform-epc-admin' },
+      { text: 'NBFI Exclusivity Form', icon: <DescriptionOutlined />, view: 'exclusivityform-nbfi', path: '/exclusivity-form/nbfi', key: 'exclusivityform-nbfi-admin' },
+      { text: 'EPC Item Maintenance', icon: <Inventory2Outlined />, view: 'itemmaintenance-epc', path: '/item-maintenance/epc', key: 'itemmaintenance-epc-admin' },
+      { text: 'NBFI Item Maintenance', icon: <Inventory2Outlined />, view: 'itemmaintenance-nbfi', path: '/item-maintenance/nbfi', key: 'itemmaintenance-nbfi-admin' },
+      { text: 'EPC Store Maintenance', icon: <StoreMallDirectoryOutlined />, view: 'storemaintenance-epc', path: '/store-maintenance/epc', key: 'storemaintenance-epc-admin' },
+      { text: 'NBFI Store Maintenance', icon: <StoreMallDirectoryOutlined />, view: 'storemaintenance-nbfi', path: '/store-maintenance/nbfi', key: 'storemaintenance-nbfi-admin' },
+    ] : [
+      { text: 'Exclusivity Form', icon: <DescriptionOutlined />, view: 'exclusivityform', path: '/exclusivity-form', key: 'exclusivityform' },
+      { text: 'Item Maintenance', icon: <Inventory2Outlined />, view: 'itemmaintenance', path: '/item-maintenance', epcOnly: true, key: 'itemmaintenance-epc' },
+      { text: 'Item Maintenance', icon: <Inventory2Outlined />, view: 'itemmaintenance', path: '/item-maintenance', nbfiOnly: true, key: 'itemmaintenance-nbfi' },
+      { text: 'Store Maintenance', icon: <StoreMallDirectoryOutlined />, view: 'storemaintenance', path: '/store-maintenance', epcOnly: true, key: 'storemaintenance-epc' },
+      { text: 'Store Maintenance', icon: <StoreMallDirectoryOutlined />, view: 'storemaintenance', path: '/store-maintenance', nbfiOnly: true, key: 'storemaintenance-nbfi' },
+    ]),
+    { text: 'User Management', icon: <PeopleIcon />, view: 'usermanagement', adminOnly: true, path: '/user-management', key: 'usermanagement' },
+    { text: 'Audit Logs', icon: <HistoryIcon />, view: 'auditlogs', adminOnly: true, path: '/audit-logs', key: 'auditlogs' },
   ];
 
   // Filter menu items based on user role and business unit
   const menuItems = allMenuItems.filter(item => {
-    // TEMPORARY DEBUG
-    // console.log('--- Filtering:', item.text);
-    // console.log('    adminOnly:', item.adminOnly, ', epcOnly:', item.epcOnly, ', nbfiOnly:', item.nbfiOnly);
-    // console.log('    user.role:', user?.role, ', user.businessUnit:', user?.businessUnit);
-    
-    // If item is admin only, check if user is admin
-    if (item.adminOnly) {
-      const result = user?.role === 'admin';
-      // console.log('    Admin check result:', result);
-      return result;
-    }
-    // If item is EPC only, check if user is admin OR has EPC business unit
-    if (item.epcOnly) {
-      const result = user?.role === 'admin' || user?.businessUnit === 'EPC';
-      // console.log('    EPC check result:', result, '(admin:', user?.role === 'admin', 'isEPC:', user?.businessUnit === 'EPC', ')');
-      return result;
-    }
-    // If item is NBFI only, check if user is admin OR has NBFI business unit
-    if (item.nbfiOnly) {
-      const result = user?.role === 'admin' || user?.businessUnit === 'NBFI';
-      // console.log('    NBFI check result:', result, '(admin:', user?.role === 'admin', 'isNBFI:', user?.businessUnit === 'NBFI', ')');
-      return result;
-    }
-    // console.log('    Default: true');
+    // For admin, show all explicit links (already handled above)
+    if (user?.role === 'admin') return true;
+    if (item.adminOnly) return user?.role === 'admin';
+    if (item.epcOnly) return user?.businessUnit === 'EPC';
+    if (item.nbfiOnly) return user?.businessUnit === 'NBFI';
     return true;
   });
 
@@ -384,10 +382,27 @@ const Dashboard = () => {
     const hasEpcAccess = user?.role === 'admin' || user?.businessUnit === 'EPC';
     const hasNbfiAccess = user?.role === 'admin' || user?.businessUnit === 'NBFI';
 
+    // Admin explicit links
+    if (user?.role === 'admin') {
+      switch (currentView) {
+        case 'exclusivityform-epc':
+          return <ExclusivityForm />;
+        case 'exclusivityform-nbfi':
+          return <NBFIExclusivityForm />;
+        case 'itemmaintenance-epc':
+          return <ItemMaintenance />;
+        case 'itemmaintenance-nbfi':
+          return <NBFIItemMaintenance />;
+        case 'storemaintenance-epc':
+          return <StoreMaintenance />;
+        case 'storemaintenance-nbfi':
+          return <NBFIStoreMaintenance />;
+      }
+    }
+
     switch (currentView) {
       case 'itemmaintenance':
-        // Show appropriate component based on business unit
-        if (user?.businessUnit === 'NBFI' && user?.role !== 'admin') {
+        if (user?.businessUnit === 'NBFI') {
           return <NBFIItemMaintenance />;
         } else if (hasEpcAccess) {
           return <ItemMaintenance />;
@@ -398,10 +413,8 @@ const Dashboard = () => {
             </MuiAlert>
           );
         }
-      
       case 'storemaintenance':
-        // Show appropriate component based on business unit
-        if (user?.businessUnit === 'NBFI' && user?.role !== 'admin') {
+        if (user?.businessUnit === 'NBFI') {
           return <NBFIStoreMaintenance />;
         } else if (hasEpcAccess) {
           return <StoreMaintenance />;
@@ -470,7 +483,7 @@ const Dashboard = () => {
       </Box>
       <List sx={{ flex: 1, px: 2 }}>
         {menuItems.map((item) => (
-          <ListItem key={item.text} disablePadding>
+          <ListItem key={item.key || item.text} disablePadding>
             <NavItem
               active={currentView === item.view ? 1 : 0}
               onClick={() => navigate(item.path)}
@@ -528,7 +541,7 @@ const Dashboard = () => {
                 <MenuIcon />
               </IconButton>
               <Typography variant="h6" sx={{ flexGrow: 1, fontWeight: '700' }}>
-                {currentView === 'exclusivityform' && user?.businessUnit === 'NBFI' && user?.role !== 'admin' ? 'NBFI Exclusivity Form' :
+                {currentView === 'exclusivityform' && user?.businessUnit === 'NBFI' && user?.role !== 'admin' ? 'Exclusivity Form' :
                  currentView === 'exclusivityform' ? 'Exclusivity Form' :
                  currentView === 'itemmaintenance' ? 'Item Maintenance' :
                  currentView === 'storemaintenance' ? 'Store Maintenance' :

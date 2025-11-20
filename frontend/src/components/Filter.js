@@ -1,14 +1,14 @@
 // src/components/Filter.js
 import React, { useMemo, useState, useEffect, useCallback } from 'react';
-import { Box, Grid, FormControl, InputLabel, Select, MenuItem } from '@mui/material';
+import { Box, Grid, FormControl, InputLabel, Select, MenuItem, Typography } from '@mui/material';
 import { useChains, useCategories, useStoreClasses } from '../hooks/useFilter';
-import { useNBFIChains, useNBFICategories, useNBFIStoreClasses } from '../hooks/useNBFIFilter';
+import { useNBFIChains, useNBFIBrands, useNBFIStoreClasses } from '../hooks/useNBFIFilter';
 
 const TRANSACTION_OPTIONS = ['Repeat Order', 'New Item'];
 
 export default function Filter({ onChange, asForm = false, hideTransaction = false, categoryLabel = 'Category', isNBFI = false }) {
   const [chain, setChain] = useState('');
-  const [category, setCategory] = useState('');
+  const [brand, setBrand] = useState('');
   const [storeClass, setStoreClass] = useState('');
   const [transaction, setTransaction] = useState('');
 
@@ -16,30 +16,43 @@ export default function Filter({ onChange, asForm = false, hideTransaction = fal
   const epcCategories = useCategories();
   const epcChains = useChains();
   const epcStoreClasses = useStoreClasses();
-  const nbfiCategories = useNBFICategories();
+  const nbfiBrands = useNBFIBrands();
   const nbfiChains = useNBFIChains();
   const nbfiStoreClasses = useNBFIStoreClasses();
-
-  // Use NBFI data or EPC data based on isNBFI prop
-  const { categories, loading: catLoading, error: catError } = isNBFI ? nbfiCategories : epcCategories;
+  // Normalize EPC vs NBFI list data (EPC hook returns { categories }, NBFI returns { brands })
+  const { categories: epcCategoriesList, loading: epcCategoriesLoading, error: epcCategoriesError } = epcCategories;
+  const { brands: nbfiBrandsList, loading: nbfiBrandsLoading, error: nbfiBrandsError } = nbfiBrands;
+  // `listItems` is the generic array used to build options: for EPC it's categories, for NBFI it's brands
+  const listItems = isNBFI ? (Array.isArray(nbfiBrandsList) ? nbfiBrandsList : []) : (Array.isArray(epcCategoriesList) ? epcCategoriesList : []);
+  const brandLoading = isNBFI ? nbfiBrandsLoading : epcCategoriesLoading;
+  const brandError = isNBFI ? nbfiBrandsError : epcCategoriesError;
   const { chains, loading: chLoading, error: chError } = isNBFI ? nbfiChains : epcChains;
   const { storeClasses, loading: scLoading, error: scError } = isNBFI ? nbfiStoreClasses : epcStoreClasses;
 
-  const loading = chLoading || catLoading || scLoading;
-  const error = chError || catError || scError;
+  const loading = chLoading || brandLoading || scLoading;
+  const error = chError || brandError || scError;
+
+
+
+
+
+
+
+
+
 
   // Debug logging
   useEffect(() => {
     if (isNBFI) {
       console.log('NBFI Filter Data:', {
         chains: chains,
-        categories: categories,
+        brands: nbfiBrandsList,
         storeClasses: storeClasses,
-        loading: { chLoading, catLoading, scLoading },
-        errors: { chError, catError, scError }
+        loading: { chLoading, brandLoading, scLoading },
+        errors: { chError, brandError, scError }
       });
     }
-  }, [isNBFI, chains, categories, storeClasses, chLoading, catLoading, scLoading, chError, catError, scError]);
+  }, [isNBFI, chains, nbfiBrandsList, storeClasses, chLoading, brandLoading, scLoading, chError, brandError, scError]);
 
   const chainOptions = useMemo(() => {
     const arr = Array.isArray(chains) ? chains : [];
@@ -57,18 +70,32 @@ export default function Filter({ onChange, asForm = false, hideTransaction = fal
   }, [chains]);
 
   const categoryOptions = useMemo(() => {
-    const arr = Array.isArray(categories) ? categories : [];
+    if (isNBFI) return [];
+    const arr = listItems;
     return arr
       .map((c) => {
-        const label = (c?.category ?? c?.catCode ?? '').toString().trim();
-        if (!label) return null;
-        // value must be lowercase category name (e.g., 'lamps', 'decors', ...)
+        let label = (c?.catCode ?? c?.category ?? '').toString().trim();
+        if (!label) label = 'Unknown';
         const value = label.toLowerCase();
+        return { value, label };
+      })
+      .filter(Boolean);
+  }, [listItems, isNBFI]);
+
+
+  const brandOptions = useMemo(() => {
+    if (!isNBFI) return [];
+    const arr = listItems;
+    return arr
+      .map((b) => {
+        const label = (b?.brand ?? b?.brandCode ?? '').toString().trim();
+        if (!label) return null;
+        const value = b?.brandCode ?? label;
         return { value, label };
       })
       .filter(Boolean)
       .sort((a, b) => (a.label || '').localeCompare(b.label || '', undefined, { sensitivity: 'base' }));
-  }, [categories]);
+  }, [listItems, isNBFI]);
 
   const storeClassOptions = useMemo(() => {
     const arr = Array.isArray(storeClasses) ? storeClasses : [];
@@ -88,27 +115,49 @@ export default function Filter({ onChange, asForm = false, hideTransaction = fal
   // Notify parent
   useEffect(() => {
     if (typeof onChange === 'function') {
-      onChange({ chain, category, storeClass, transaction });
+      if (isNBFI) {
+        // Keep backward-compatible property `category` populated with brand
+        // so consumers that expect `category` (e.g., useNBFIItems) continue to work.
+        // Debug: log emitted payload for easier tracing in browser devtools
+        console.log('Filter -> onChange (NBFI emit):', { chain, brand, category: brand, storeClass, transaction });
+        onChange({ chain, brand, category: brand, storeClass, transaction });
+      } else {
+        // Debug: log emitted payload for EPC flows as well
+        console.log('Filter -> onChange (EPC emit):', { chain, category, storeClass, transaction });
+        onChange({ chain, category, storeClass, transaction });
+      }
     }
-  }, [chain, category, storeClass, transaction, onChange]);
+  }, [chain, brand, storeClass, transaction, onChange, isNBFI]);
 
   // ✅ Auto-clear invalid selections if options change underneath
   useEffect(() => {
     if (chain && !chainOptions.some((o) => o.value === chain)) {
       setChain('');
-      setCategory('');
+      setBrand('');
       setStoreClass('');
       setTransaction('');
     }
   }, [chain, chainOptions]);
 
+  // For EPC, keep category state in sync (legacy)
+  const [category, setCategory] = useState('');
   useEffect(() => {
-    if (category && !categoryOptions.some((o) => o.value === category)) {
-      setCategory('');
+    if (!isNBFI) {
+      if (category && !brandOptions.some((o) => o.value === category)) {
+        setCategory('');
+        setStoreClass('');
+        setTransaction('');
+      }
+    }
+  }, [category, brandOptions, isNBFI]);
+
+  useEffect(() => {
+    if (brand && !brandOptions.some((o) => o.value === brand)) {
+      setBrand('');
       setStoreClass('');
       setTransaction('');
     }
-  }, [category, categoryOptions]);
+  }, [brand, brandOptions]);
 
   useEffect(() => {
     if (storeClass && !storeClassOptions.some((o) => o.value === storeClass)) {
@@ -119,13 +168,17 @@ export default function Filter({ onChange, asForm = false, hideTransaction = fal
 
   const handleChainChange = useCallback((e) => {
     setChain(e.target.value);
-    setCategory('');
+    if (isNBFI) {
+      setBrand('');
+    } else {
+      setCategory('');
+    }
     setStoreClass('');
     setTransaction('');
-  }, []);
+  }, [isNBFI]);
 
-  const handleCategoryChange = useCallback((e) => {
-    setCategory(e.target.value);
+  const handleBrandChange = useCallback((e) => {
+    setBrand(e.target.value);
     setStoreClass('');
     setTransaction('');
   }, []);
@@ -181,14 +234,13 @@ export default function Filter({ onChange, asForm = false, hideTransaction = fal
     <Box component="div" autoComplete="off" sx={{ '& > :not(style)': { width: '100%' } }}>
       <Grid container spacing={3}>
         <Grid item xs={12} md={hideTransaction ? 4 : 3}>
-          <FormControl size="small" fullWidth>
+          <FormControl size="small" fullWidth disabled={loading || !!error || chainOptions.length === 0}>
             <InputLabel id="filter-chain">Chain</InputLabel>
             <Select
               labelId="filter-chain"
               value={chain}
               label="Chain"
               onChange={handleChainChange}
-              disabled={loading || !!error || chainOptions.length === 0}
               renderValue={(v) => (v ? chainOptions.find((o) => o.value === v)?.label : '— Select Chain —')}
             >
               <PlaceholderItem text="— Select Chain —" />
@@ -202,20 +254,26 @@ export default function Filter({ onChange, asForm = false, hideTransaction = fal
                   </MenuItem>
                 ))}
             </Select>
+            <Box sx={{ minHeight: 20 }}>
+              {/* Loading indicator removed as per request */}
+            </Box>
           </FormControl>
         </Grid>
 
         <Grid item xs={12} md={hideTransaction ? 4 : 3}>
-          <FormControl size="small" fullWidth>
-            <InputLabel id="filter-category">{categoryLabel}</InputLabel>
+          <FormControl size="small" fullWidth disabled={loading || !!error || (isNBFI ? brandOptions.length === 0 : epcCategories.categories.length === 0)}>
+            <InputLabel id="filter-brand">{categoryLabel}</InputLabel>
             <Select
-              labelId="filter-category"
-              value={category}
+              labelId="filter-brand"
+              value={isNBFI ? brand : category}
               label={categoryLabel}
-              onChange={handleCategoryChange}
-              disabled={loading || !!error || categoryOptions.length === 0 || !chain}
+              onChange={isNBFI ? handleBrandChange : (e) => setCategory(e.target.value)}
               renderValue={(v) =>
-                v ? categoryOptions.find((o) => o.value === v)?.label : `— Select ${categoryLabel} —`
+                v
+                  ? (isNBFI
+                      ? brandOptions.find((o) => o.value === v)?.label
+                      : categoryOptions.find((o) => o.value === v)?.label)
+                  : `— Select ${categoryLabel} —`
               }
             >
               <PlaceholderItem text={`— Select ${categoryLabel} —`} />
@@ -223,24 +281,32 @@ export default function Filter({ onChange, asForm = false, hideTransaction = fal
               {!loading && error && <MenuItem disabled>{String(error)}</MenuItem>}
               {!loading &&
                 !error &&
-                categoryOptions.map((o) => (
-                  <MenuItem key={o.value} value={o.value}>
-                    {o.label}
-                  </MenuItem>
-                ))}
+                (isNBFI
+                  ? brandOptions.map((o) => (
+                      <MenuItem key={o.value} value={o.value}>
+                        {o.label}
+                      </MenuItem>
+                    ))
+                  : categoryOptions.map((o) => (
+                      <MenuItem key={o.value} value={o.value}>
+                        {o.label}
+                      </MenuItem>
+                    )))}
             </Select>
+            <Box sx={{ minHeight: 20 }}>
+              {/* Loading indicator removed as per request */}
+            </Box>
           </FormControl>
         </Grid>
 
         <Grid item xs={12} md={hideTransaction ? 4 : 3}>
-          <FormControl size="small" fullWidth>
+          <FormControl size="small" fullWidth disabled={loading || !!error || storeClassOptions.length === 0 || (isNBFI ? !brand : !category)}>
             <InputLabel id="filter-store-class">Store Classification</InputLabel>
             <Select
               labelId="filter-store-class"
               value={storeClass}
               label="Store Classification"
               onChange={handleStoreClassChange}
-              disabled={loading || !!error || storeClassOptions.length === 0 || !category}
               renderValue={(v) =>
                 v ? storeClassOptions.find((o) => o.value === v)?.label : '— Select Store Class —'
               }
@@ -256,6 +322,9 @@ export default function Filter({ onChange, asForm = false, hideTransaction = fal
                   </MenuItem>
                 ))}
             </Select>
+            <Box sx={{ minHeight: 20 }}>
+              {/* Loading indicator removed as per request */}
+            </Box>
           </FormControl>
         </Grid>
 

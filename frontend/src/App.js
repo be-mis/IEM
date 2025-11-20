@@ -53,8 +53,14 @@ function App() {
               {/* Protected Routes */}
               <Route path="/" element={<Navigate to="/exclusivity-form" replace />} />
               <Route path="/exclusivity-form" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+              <Route path="/exclusivity-form/epc" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+              <Route path="/exclusivity-form/nbfi" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
               <Route path="/item-maintenance" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+              <Route path="/item-maintenance/epc" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+              <Route path="/item-maintenance/nbfi" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
               <Route path="/store-maintenance" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+              <Route path="/store-maintenance/epc" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+              <Route path="/store-maintenance/nbfi" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
               <Route path="/user-management" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
               <Route path="/audit-logs" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
               <Route 

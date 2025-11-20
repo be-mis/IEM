@@ -1,8 +1,19 @@
-// routes/filters.js
+
+// DEPRECATED: Old monolithic filters router
+// This file has been intentionally replaced with a lightweight deprecation
+// stub. The project now uses `filters_epc.js` and `filters_nbfi.js` under
+// the same `/api/filters` mount point. Keep this file present as a stub to
+// avoid accidental requires elsewhere, but it will return 410 Gone for any
+// incoming requests.
+
 const express = require('express');
 const router = express.Router();
-const { getPool } = require('../config/database');
-const mysql = require('mysql2'); // for mysql.format()
+
+router.use((req, res) => {
+  res.status(410).json({ error: 'Deprecated route. Use /api/filters (EPC/NBFI split routers).' });
+});
+
+module.exports = router;
 
 // GET /api/filters/categories
 router.get('/categories', async (req, res) => {
@@ -393,32 +404,7 @@ router.get('/available-branches', async (req, res) => {
 // NBFI-SPECIFIC ENDPOINTS
 // ============================================================================
 
-// GET /api/filters/nbfi/categories (or brands)
-router.get('/nbfi/categories', async (req, res) => {
-  try {
-    const pool = getPool();
-    // Try nbfi_categories first, fallback to nbfi_brands
-    let rows;
-    try {
-      [rows] = await pool.execute(
-        'SELECT id, catCode, category FROM nbfi_categories ORDER BY category ASC'
-      );
-    } catch (err) {
-      // If nbfi_categories doesn't exist, try nbfi_brands
-      if (err.code === 'ER_NO_SUCH_TABLE') {
-        [rows] = await pool.execute(
-          'SELECT id, brandCode AS catCode, brand AS category FROM nbfi_brands ORDER BY brand ASC'
-        );
-      } else {
-        throw err;
-      }
-    }
-    res.json({ items: rows.map(r => ({ id: r.id, catCode: r.catCode, category: r.category })) });
-  } catch (err) {
-    console.error('GET /filters/nbfi/categories error:', err);
-    res.status(500).json({ error: 'Failed to fetch NBFI categories' });
-  }
-});
+// (Removed /nbfi/categories endpoint, use /nbfi/brands only)
 
 // GET /api/filters/nbfi/store-classes
 router.get('/nbfi/store-classes', async (req, res) => {
@@ -462,20 +448,20 @@ router.get('/nbfi/chains', async (req, res) => {
 // GET /api/filters/nbfi/stores (stores)
 router.get('/nbfi/stores', async (req, res) => {
   try {
-    let { chain, storeClass, category } = req.query;
-    if (!chain || !storeClass || !category) {
-      return res.status(400).json({ error: 'Missing required parameters: chain, storeClass, and category are required' });
+    let { chain, storeClass, brand } = req.query;
+    if (!chain || !storeClass || !brand) {
+      return res.status(400).json({ error: 'Missing required parameters: chain, storeClass, and brand are required' });
     }
 
     chain = String(chain).trim();
     storeClass = String(storeClass).trim();
-    category = String(category).trim().toUpperCase();
+      brand = String(brand).trim();
 
-    console.log('GET /filters/nbfi/stores', { chain, storeClass, category });
+    console.log('GET /filters/nbfi/stores', { chain, storeClass, brand });
 
-    // Build brand column name from category (brand code)
+    // Build brand column name from brand code
     const sanitize = (s) => String(s || '').trim().replace(/\s+/g, '_').replace(/[^A-Za-z0-9_]/g, '').toLowerCase();
-    const brandCol = `brand_${sanitize(category)}`;
+    const brandCol = `brand_${sanitize(brand)}`;
 
     const pool = getPool();
 
@@ -614,14 +600,14 @@ router.get('/nbfi/stores', async (req, res) => {
 // GET /api/filters/nbfi/items
 router.get('/nbfi/items', async (req, res) => {
   try {
-    let { category } = req.query;
-    if (!category) {
-      return res.status(400).json({ error: 'Missing required parameter: category' });
+    let { brand } = req.query;
+    if (!brand) {
+      return res.status(400).json({ error: 'Missing required parameter: brand' });
     }
 
-    category = String(category).trim();
+    brand = String(brand).trim();
 
-    console.log('GET /filters/nbfi/items', { category });
+    console.log('GET /filters/nbfi/items', { brand });
 
     const pool = getPool();
     const query = `
@@ -630,7 +616,7 @@ router.get('/nbfi/items', async (req, res) => {
       WHERE LOWER(itemBrand) = LOWER(?)
       ORDER BY itemCode ASC
     `;
-    const [rows] = await pool.execute(query, [category]);
+    const [rows] = await pool.execute(query, [brand]);
 
     res.json({ items: rows.map(r => ({ itemCode: r.itemCode, itemDescription: r.itemDescription })) });
   } catch (err) {
@@ -642,14 +628,14 @@ router.get('/nbfi/items', async (req, res) => {
 // GET /api/filters/nbfi/exclusivity-items - Fetch items with exclusivity based on chain, brand, and storeClass
 router.get('/nbfi/exclusivity-items', async (req, res) => {
   try {
-    let { chain, storeClass, category } = req.query;
-    if (!chain || !storeClass || !category) {
-      return res.status(400).json({ error: 'Missing required parameters: chain, storeClass, and category are required' });
+    let { chain, storeClass, brand } = req.query;
+    if (!chain || !storeClass || !brand) {
+      return res.status(400).json({ error: 'Missing required parameters: chain, storeClass, and brand are required' });
     }
 
     chain = String(chain).trim().toUpperCase();
     storeClass = String(storeClass).trim().toUpperCase();
-    const brand = String(category).trim();
+    brand = String(brand).trim();
 
     const allowedChains = ['SM', 'RDS', 'WDS'];
     const allowedStoreClasses = ['ASEH', 'BSH', 'CSM', 'DSS', 'ESES'];
@@ -706,14 +692,14 @@ router.get('/nbfi/exclusivity-items', async (req, res) => {
 // GET /api/filters/nbfi/items-for-assignment
 router.get('/nbfi/items-for-assignment', async (req, res) => {
   try {
-    let { chain, storeClass, category } = req.query;
-    if (!chain || !storeClass || !category) {
-      return res.status(400).json({ error: 'Missing required parameters: chain, storeClass, and category are required' });
+    let { chain, storeClass, brand } = req.query;
+    if (!chain || !storeClass || !brand) {
+      return res.status(400).json({ error: 'Missing required parameters: chain, storeClass, and brand are required' });
     }
 
     chain = String(chain).trim().toUpperCase();
     storeClass = String(storeClass).trim().toUpperCase();
-    const brand = String(category).trim();
+    brand = String(brand).trim();
 
     const allowedChains = ['SM', 'RDS', 'WDS'];
     const allowedStoreClasses = ['ASEH', 'BSH', 'CSM', 'DSS', 'ESES'];
@@ -759,35 +745,38 @@ router.get('/nbfi/items-for-assignment', async (req, res) => {
 // GET /api/filters/nbfi/available-stores
 router.get('/nbfi/available-stores', async (req, res) => {
   try {
-    let { chain, category } = req.query;
-    if (!chain || !category) {
-      return res.status(400).json({ error: 'Missing required parameters: chain and category are required' });
+    let { chain, brand } = req.query;
+    if (!chain || !brand) {
+      return res.status(400).json({ error: 'Missing required parameters: chain and brand are required' });
     }
 
     chain = String(chain).trim();
-    category = String(category).trim().toLowerCase();
+    brand = String(brand).trim();
 
-    const validColumns = {
-      'lamps': 'lampsClass',
-      'decors': 'decorsClass',
-      'clocks': 'clocksClass',
-      'stationery': 'stationeryClass',
-      'frames': 'framesClass'
-    };
+    // Build brand column name from brand code
+    const sanitize = (s) => String(s || '').trim().replace(/\s+/g, '_').replace(/[^A-Za-z0-9_]/g, '').toLowerCase();
+    const brandCol = `brand_${sanitize(brand)}`;
 
-    const categoryColumn = validColumns[category];
-    if (!categoryColumn) {
-      return res.status(400).json({ error: `Invalid category. Must be one of: ${Object.keys(validColumns).join(', ')}` });
-    }
-
-    console.log('GET /filters/nbfi/available-stores', { chain, category });
+    console.log('GET /filters/nbfi/available-stores', { chain, brand, brandCol });
 
     const pool = getPool();
+    // Check if the brand column exists
+    const [colInfo] = await pool.execute(
+      `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'nbfi_stores' AND COLUMN_NAME = ?`,
+      [brandCol]
+    );
+    if (!Array.isArray(colInfo) || colInfo.length === 0) {
+      return res.status(400).json({ error: `Invalid brand '${brand}' or brand column not found in nbfi_stores` });
+    }
+
     const query = `
-      SELECT storeCode, storeName, chainCode, ${categoryColumn} as storeClass
-      FROM nbfi_stores
-      WHERE chainCode = ? AND ${categoryColumn} IS NOT NULL AND ${categoryColumn} != ''
-      ORDER BY storeCode ASC
+      SELECT storeCode, storeName, chainCode, \
+        CASE WHEN \
+          (s.\`${brandCol}\` IS NOT NULL AND s.\`${brandCol}\` != '') \
+        THEN s.\`${brandCol}\` ELSE NULL END as storeClass
+      FROM nbfi_stores s
+      WHERE s.chainCode = ? AND s.\`${brandCol}\` IS NOT NULL AND s.\`${brandCol}\` != ''
+      ORDER BY s.storeCode ASC
     `;
     const [rows] = await pool.execute(query, [chain]);
 

@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import axios from 'axios';
 
 // Set up axios base URL
-const API_BASE_URL = process.env.REACT_APP_API_BASE || 'http://localhost:5000/api';
+const API_BASE_URL = process.env.REACT_APP_API_BASE || 'http://localhost:3001/api';
 const api = axios.create({
   baseURL: API_BASE_URL,
   timeout: 10000, // 10 second timeout
@@ -38,29 +38,29 @@ api.interceptors.response.use(
   }
 );
 
-// Custom hook for NBFI categories (brands)
-export const useNBFICategories = () => {
-  const [categories, setCategories] = useState([]);
+// Custom hook for NBFI brands
+export const useNBFIBrands = () => {
+  const [brands, setBrands] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const fetchCategories = async () => {
+  const fetchBrands = async () => {
     try {
       setLoading(true);
       setError(null);
-      const response = await api.get('/filters/nbfi/categories');
-      setCategories(response.data.items || []);
+      const response = await api.get('/filters/nbfi/brands');
+      setBrands(response.data.items || []);
     } catch (err) {
-      setError(err.response?.data?.error || err.message || 'Failed to fetch NBFI categories');
-      setCategories([]);
+      setError(err.response?.data?.error || err.message || 'Failed to fetch NBFI brands');
+      setBrands([]);
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => { fetchCategories(); }, []);
+  useEffect(() => { fetchBrands(); }, []);
 
-  return { categories, loading, error, refetch: fetchCategories };
+  return { brands, loading, error, refetch: fetchBrands };
 };
 
 // Custom hook for NBFI chains

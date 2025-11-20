@@ -19,7 +19,17 @@ import { useNBFIBranches } from '../hooks/useNBFIBranches';
 const columns = [
   { id: 'branchCode', label: 'Branch Code', minWidth: 180 },
   { id: 'branchName', label: 'Branch Name', minWidth: 220 },
+  { id: 'storeClass', label: 'Store Class', minWidth: 160 },
 ];
+
+// Human-friendly mapping for store-class codes
+const STORE_CLASS_LABELS = {
+  ASEH: 'A Stores - Extra High',
+  BSH: 'B Stores - High',
+  CSM: 'C Stores - Medium',
+  DSS: 'D Stores - Small',
+  ESES: 'E Stores - Extra Small'
+};
 
 export default function NBFIListOfBranch({ filters }) {
   const { branches, loading, error } = useNBFIBranches(filters);
@@ -112,6 +122,13 @@ export default function NBFIListOfBranch({ filters }) {
           </TableHead>
 
           <TableBody>
+            {pagedRows.length === 0 && !loading && !error && (
+              <TableRow>
+                <TableCell colSpan={columns.length} align="center" sx={{ color: 'text.secondary', fontStyle: 'italic' }}>
+                  No results found.
+                </TableCell>
+              </TableRow>
+            )}
             {pagedRows.map((row, idx) => (
               <TableRow
                 hover
@@ -120,7 +137,9 @@ export default function NBFIListOfBranch({ filters }) {
               >
                 {columns.map((column) => (
                   <TableCell key={column.id}>
-                    {row[column.id]}
+                    {column.id === 'storeClass'
+                      ? (row.storeClass ? (STORE_CLASS_LABELS[String(row.storeClass).toUpperCase()] || row.storeClass) : '—')
+                      : row[column.id]}
                   </TableCell>
                 ))}
               </TableRow>

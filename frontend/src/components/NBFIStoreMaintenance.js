@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { Box, Paper, TextField, Table, TableBody, TableContainer, TableHead, TableRow, TableCell, TablePagination, IconButton, InputAdornment, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Button, Checkbox, Stack, CircularProgress, Alert, FormControl, InputLabel, Select, MenuItem, Typography, Autocomplete, Snackbar, Tooltip, Grid } from '@mui/material';
 import { TuneOutlined, Search as SearchIcon, Clear as ClearIcon, DeleteForever as DeleteForeverIcon, Add as AddIcon, CloudUpload as CloudUploadIcon, FileDownload as FileDownloadIcon } from '@mui/icons-material';
@@ -5,13 +6,32 @@ import Filter from './Filter';
 import axios from 'axios';
 import * as XLSX from 'xlsx';
 
+// Fetch stores for Add Store modal (by chain only, exclusive endpoint)
+async function fetchModalStores(chain) {
+  if (!chain) return [];
+  try {
+    const response = await axios.get(`${API_BASE_URL}/filters/nbfi/modal-stores`, {
+      params: { chain }
+    });
+    return response.data.items || [];
+  } catch (err) {
+    console.error('Error fetching modal stores:', err);
+    return [];
+  }
+}
+
 const API_BASE_URL = process.env.REACT_APP_API_BASE || 'http://localhost:5000/api';
 
 export default function NBFIStoreMaintenance() {
   const [rowsState, setRowsState] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [filterValues, setFilterValues] = useState({ chain: '', category: '', storeClass: '' });
+  const [filterValues, setFilterValues] = useState({
+    chain: '',
+    brand: '',
+    storeClass: '',
+    transaction: ''
+  });
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
@@ -20,14 +40,14 @@ export default function NBFIStoreMaintenance() {
   const [dialogMode, setDialogMode] = useState('single');
   const [selectedRow, setSelectedRow] = useState(null);
   const [openAddModal, setOpenAddModal] = useState(false);
-  const [addBranchForm, setAddBranchForm] = useState({ chain: '', category: '', storeClass: '', branchCode: '' });
+  const [addBranchForm, setAddBranchForm] = useState({ chain: '', brand: '', storeClass: '', branchCode: '' });
   const [availableBranches, setAvailableBranches] = useState([]);
   const [loadingBranches, setLoadingBranches] = useState(false);
   const [addedBranches, setAddedBranches] = useState([]);
   const [addedBranchesPage, setAddedBranchesPage] = useState(0);
   const [addedBranchesRowsPerPage, setAddedBranchesRowsPerPage] = useState(5);
   const [chains, setChains] = useState([]);
-  const [categories, setCategories] = useState([]);
+  const [brands, setBrands] = useState([]);
   const [storeClasses, setStoreClasses] = useState([]);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   
@@ -39,7 +59,7 @@ export default function NBFIStoreMaintenance() {
   const [isDragging, setIsDragging] = useState(false);
 
   const fetchBranches = async () => {
-    if (!filterValues.chain || !filterValues.category || !filterValues.storeClass) {
+    if (!filterValues.chain || !filterValues.brand || !filterValues.storeClass) {
       setRowsState([]);
       return;
     }
@@ -49,8 +69,8 @@ export default function NBFIStoreMaintenance() {
       const response = await axios.get(`${API_BASE_URL}/filters/nbfi/stores`, { 
         params: {
           chain: filterValues.chain,
-          brand: filterValues.category,
-          storeType: filterValues.storeClass
+          brand: filterValues.brand,
+          storeClass: filterValues.storeClass
         }
       });
       setRowsState((response.data.items || []).map(b => ({ branchCode: b.branchCode, branchName: b.branchName })));
@@ -65,20 +85,20 @@ export default function NBFIStoreMaintenance() {
   useEffect(() => {
     const fetchDropdownData = async () => {
       try {
-        const [c, cat, sc] = await Promise.all([
+        const [c, br, sc] = await Promise.all([
           axios.get(`${API_BASE_URL}/filters/nbfi/chains`),
-          axios.get(`${API_BASE_URL}/filters/nbfi/categories`),
+          axios.get(`${API_BASE_URL}/filters/nbfi/brands`),
           axios.get(`${API_BASE_URL}/filters/nbfi/store-classes`)
         ]);
         setChains(c.data.items || []);
-        setCategories(cat.data.items || []);
+        setBrands(br.data.items || []);
         setStoreClasses(sc.data.items || []);
       } catch (err) { console.error(err); }
     };
     fetchDropdownData();
   }, []);
 
-  useEffect(() => { fetchBranches(); }, [filterValues.chain, filterValues.category, filterValues.storeClass]);
+  useEffect(() => { fetchBranches(); }, [filterValues.chain, filterValues.brand, filterValues.storeClass]);
 
   const filteredRows = useMemo(() => {
     if (!search.trim()) return rowsState;
@@ -90,27 +110,19 @@ export default function NBFIStoreMaintenance() {
 
   useEffect(() => setPage(0), [search]);
 
-  // Fetch available stores for add modal
+  // Fetch available stores for Add Store modal using the exclusive endpoint
   const fetchAvailableBranches = async () => {
-    const { chain, category, storeClass } = addBranchForm;
-    
-    if (!chain || !category || !storeClass) {
+    const { chain } = addBranchForm;
+    if (!chain) {
       setAvailableBranches([]);
       return;
     }
-
     try {
       setLoadingBranches(true);
-      const response = await axios.get(`${API_BASE_URL}/filters/nbfi/available-stores`, {
-        params: { 
-          chain, 
-          brand: category,
-          storeType: storeClass
-        }
-      });
-      setAvailableBranches(response.data.items || []);
+      const items = await fetchModalStores(chain);
+      console.log('[Add Store Modal] Fetched stores for chain', chain, items);
+      setAvailableBranches(items);
     } catch (err) {
-      console.error('Error fetching available stores:', err);
       setAvailableBranches([]);
     } finally {
       setLoadingBranches(false);
@@ -118,18 +130,28 @@ export default function NBFIStoreMaintenance() {
   };
 
   useEffect(() => {
-    if (addBranchForm.chain && addBranchForm.category && addBranchForm.storeClass) {
+    if (addBranchForm.chain && addBranchForm.brand && addBranchForm.storeClass) {
+      fetchAvailableBranches();
+    } else if (addBranchForm.chain) {
       fetchAvailableBranches();
     } else {
       setAvailableBranches([]);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [addBranchForm.chain, addBranchForm.category, addBranchForm.storeClass]);
+  }, [addBranchForm.chain, addBranchForm.brand, addBranchForm.storeClass]);
 
-  // Filter available stores to exclude already added
+  // Filter available stores to exclude already added and match storeClass if selected
+  // Filter available stores to exclude already added (no storeClass filtering)
   const filteredAvailableBranches = useMemo(() => {
-    const addedCodes = new Set(addedBranches.map(b => b.branchCode));
-    return availableBranches.filter(b => !addedCodes.has(b.branchCode));
+    // Exclude only if branch is already added for the same chain, brand, and storeClass
+    return availableBranches.filter(b => {
+      return !addedBranches.some(added =>
+        added.branchCode === b.branchCode &&
+        added.chain === addBranchForm.chain &&
+        added.brand === addBranchForm.brand &&
+        added.storeClass === addBranchForm.storeClass
+      );
+    });
   }, [availableBranches, addedBranches]);
 
   const paginatedAddedBranches = useMemo(() => {
@@ -142,7 +164,7 @@ export default function NBFIStoreMaintenance() {
     setOpenAddModal(true);
     setAddBranchForm({
       chain: '',
-      category: '',
+      brand: '',
       storeClass: '',
       branchCode: ''
     });
@@ -154,7 +176,7 @@ export default function NBFIStoreMaintenance() {
     setOpenAddModal(false);
     setAddBranchForm({
       chain: '',
-      category: '',
+      brand: '',
       storeClass: '',
       branchCode: ''
     });
@@ -162,19 +184,57 @@ export default function NBFIStoreMaintenance() {
   };
 
   const handleAddBranchFormChange = (field, value) => {
-    setAddBranchForm(prev => ({ ...prev, [field]: value }));
-    if (field !== 'branchCode') {
-      setAddBranchForm(prev => ({ ...prev, branchCode: '' }));
+    if (field === 'chain') {
+      setAddBranchForm(prev => ({
+        ...prev,
+        chain: value,
+        brand: '',
+        storeClass: '',
+        branchCode: ''
+      }));
+    } else if (field === 'brand') {
+      setAddBranchForm(prev => ({
+        ...prev,
+        brand: value,
+        storeClass: '',
+        branchCode: ''
+      }));
+    } else if (field === 'storeClass') {
+      setAddBranchForm(prev => ({
+        ...prev,
+        storeClass: value,
+        branchCode: ''
+      }));
+    } else {
+      setAddBranchForm(prev => ({ ...prev, [field]: value }));
     }
+    // Do NOT clear addedBranches on any field change
   };
 
   const handleAddBranchToList = () => {
-    const { branchCode } = addBranchForm;
+    const { branchCode, chain, brand, storeClass } = addBranchForm;
     if (!branchCode) return;
 
     const branch = availableBranches.find(b => b.branchCode === branchCode);
-    if (branch && !addedBranches.find(b => b.branchCode === branchCode)) {
-      setAddedBranches(prev => [...prev, branch]);
+    // Only add if not already added for the same chain, brand, and storeClass
+    if (
+      branch &&
+      !addedBranches.some(b =>
+        b.branchCode === branchCode &&
+        b.chain === chain &&
+        b.brand === brand &&
+        b.storeClass === storeClass
+      )
+    ) {
+      setAddedBranches(prev => [
+        ...prev,
+        {
+          ...branch,
+          chain,
+          brand,
+          storeClass
+        }
+      ]);
       setAddBranchForm(prev => ({ ...prev, branchCode: '' }));
     }
   };
@@ -199,14 +259,14 @@ export default function NBFIStoreMaintenance() {
       // Format branches array as expected by the backend
       const branchesData = addedBranches.map(b => ({
         chain: addBranchForm.chain,
-        brand: addBranchForm.category,
+        brand: addBranchForm.brand,
         storeClass: addBranchForm.storeClass,
         branchCode: b.branchCode
       }));
 
       const response = await axios.post(`${API_BASE_URL}/inventory/nbfi/add-exclusivity-branches`, {
         branches: branchesData,
-        brand: addBranchForm.category
+        brand: addBranchForm.brand
       });
 
       // Check results - backend returns { summary: { success, failed }, results: { success: [], failed: [] } }
@@ -245,6 +305,14 @@ export default function NBFIStoreMaintenance() {
 
   // Delete Handlers
   const handleOpenDialog = (row) => {
+    if (!filterValues.chain || !filterValues.brand || !filterValues.storeClass) {
+      setSnackbar({
+        open: true,
+        message: 'Please select Chain, Brand, and Store Classification before deleting.',
+        severity: 'error'
+      });
+      return;
+    }
     setDialogMode('single');
     setSelectedRow(row);
     setOpenDialog(true);
@@ -252,6 +320,14 @@ export default function NBFIStoreMaintenance() {
 
   const handleOpenBulkDialog = () => {
     if (selectedRows.size === 0) return;
+    if (!filterValues.chain || !filterValues.brand || !filterValues.storeClass) {
+      setSnackbar({
+        open: true,
+        message: 'Please select Chain, Brand, and Store Classification before deleting.',
+        severity: 'error'
+      });
+      return;
+    }
     setDialogMode('multiple');
     setOpenDialog(true);
   };
@@ -269,12 +345,25 @@ export default function NBFIStoreMaintenance() {
         ? [selectedRow.branchCode]
         : Array.from(selectedRows);
 
-      const response = await axios.post(`${API_BASE_URL}/inventory/nbfi/remove-exclusivity-branches`, {
+      // Guard: ensure all required params are present
+      if (!filterValues.chain || !filterValues.brand || !filterValues.storeClass || !branchesToDelete.length) {
+        setSnackbar({
+          open: true,
+          message: 'Missing required parameters for delete operation.',
+          severity: 'error'
+        });
+        setLoading(false);
+        handleCloseDialog();
+        return;
+      }
+      const payload = {
         branchCodes: branchesToDelete,
         chain: filterValues.chain,
-        brand: filterValues.category,
-        storeType: filterValues.storeClass
-      });
+        brand: filterValues.brand,
+        storeClass: filterValues.storeClass
+      };
+      console.log('Delete payload:', payload);
+      const response = await axios.post(`${API_BASE_URL}/inventory/nbfi/remove-exclusivity-branches`, payload);
 
       const summary = response.data.summary || {};
       const successCount = summary.success || 0;
@@ -579,7 +668,7 @@ export default function NBFIStoreMaintenance() {
           <TuneOutlined />
           <strong>Parameter</strong>
         </Box>
-        <Filter onChange={setFilterValues} hideTransaction={true} />
+        <Filter onChange={setFilterValues} hideTransaction={true} categoryLabel="Brand" isNBFI={true} />
       </Box>
 
       {/* Error Alert */}
@@ -621,7 +710,7 @@ export default function NBFIStoreMaintenance() {
                 ) : null,
               }}
               sx={{ flex: 1, mr: 2 }}
-              disabled={!filterValues.chain || !filterValues.category || !filterValues.storeClass}
+              disabled={!filterValues.chain || !filterValues.brand || !filterValues.storeClass}
             />
 
             <Button
@@ -692,8 +781,8 @@ export default function NBFIStoreMaintenance() {
               {paginatedRows.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={4} align="center">
-                    {!filterValues.chain || !filterValues.category || !filterValues.storeClass
-                      ? 'Please select Chain, Category, and Store Classification to view branches.'
+                    {!filterValues.chain || !filterValues.brand || !filterValues.storeClass
+                      ? 'Please select Chain, Brand, and Store Classification to view branches.'
                       : `No results found${search ? ` for "${search}"` : ''}.`}
                   </TableCell>
                 </TableRow>
@@ -802,19 +891,19 @@ export default function NBFIStoreMaintenance() {
 
               <Grid item xs={12} md={6}>
                 <FormControl fullWidth size="small">
-                  <InputLabel>Category</InputLabel>
+                  <InputLabel>Brand</InputLabel>
                   <Select
-                    value={addBranchForm.category}
-                    label="Category"
-                    onChange={(e) => handleAddBranchFormChange('category', e.target.value)}
+                    value={addBranchForm.brand || ''}
+                    label="Brand"
+                    onChange={(e) => handleAddBranchFormChange('brand', e.target.value)}
                     disabled={!addBranchForm.chain}
                   >
                     <MenuItem value="">
-                      <em>Select Category</em>
+                      <em>Select Brand</em>
                     </MenuItem>
-                    {categories.map((cat, index) => (
-                      <MenuItem key={cat.id || cat.catCode || `cat-${index}`} value={cat.category.toLowerCase()}>
-                        {cat.category}
+                    {brands.map((b, index) => (
+                      <MenuItem key={b.brandCode || `brand-${index}`} value={b.brandCode}>
+                        {b.brand}
                       </MenuItem>
                     ))}
                   </Select>
@@ -825,10 +914,10 @@ export default function NBFIStoreMaintenance() {
                 <FormControl fullWidth size="small">
                   <InputLabel>Store Classification</InputLabel>
                   <Select
-                    value={addBranchForm.storeClass}
+                    value={addBranchForm.storeClass || ''}
                     label="Store Classification"
                     onChange={(e) => handleAddBranchFormChange('storeClass', e.target.value)}
-                    disabled={!addBranchForm.category}
+                    disabled={!addBranchForm.brand}
                   >
                     <MenuItem value="">
                       <em>Select Store Classification</em>
@@ -850,13 +939,13 @@ export default function NBFIStoreMaintenance() {
                   getOptionLabel={(option) => `${option.branchCode} - ${option.branchName}`}
                   value={filteredAvailableBranches.find(b => b.branchCode === addBranchForm.branchCode) || null}
                   onChange={(e, newValue) => handleAddBranchFormChange('branchCode', newValue?.branchCode || '')}
-                  disabled={!addBranchForm.storeClass || loadingBranches}
+                  disabled={!addBranchForm.chain || loadingBranches}
                   loading={loadingBranches}
                   noOptionsText={loadingBranches ? "Loading branches..." : filteredAvailableBranches.length === 0 ? "No available stores" : "No stores found"}
                   renderInput={(params) => (
                     <TextField
                       {...params}
-                      label="Branch"
+                      label="Store"
                       placeholder="Search by code or name..."
                       InputProps={{
                         ...params.InputProps,
@@ -886,7 +975,7 @@ export default function NBFIStoreMaintenance() {
                     color="primary"
                     fullWidth
                     onClick={handleAddBranchToList}
-                    disabled={!addBranchForm.chain || !addBranchForm.category || !addBranchForm.storeClass || !addBranchForm.branchCode}
+                    disabled={!addBranchForm.chain || !addBranchForm.branchCode}
                   >
                     Add to List
                   </Button>
@@ -912,25 +1001,36 @@ export default function NBFIStoreMaintenance() {
                       <TableRow>
                         <TableCell><strong>Store Code</strong></TableCell>
                         <TableCell><strong>Store Name</strong></TableCell>
+                        <TableCell><strong>Brand</strong></TableCell>
+                        <TableCell><strong>Store Classification</strong></TableCell>
                         <TableCell align="center"><strong>Action</strong></TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {paginatedAddedBranches.map((branch) => (
-                        <TableRow key={branch.branchCode}>
-                          <TableCell>{branch.branchCode}</TableCell>
-                          <TableCell>{branch.branchName}</TableCell>
-                          <TableCell align="center">
-                            <IconButton
-                              color="error"
-                              size="small"
-                              onClick={() => handleRemoveFromAddedList(branch.branchCode)}
-                            >
-                              <DeleteForeverIcon />
-                            </IconButton>
-                          </TableCell>
-                        </TableRow>
-                      ))}
+                      {paginatedAddedBranches.map((branch) => {
+                        // Find brand and storeClass descriptions
+                        const brandObj = brands.find(b => b.brandCode === branch.brand || b.brandCode === branch.brandCode);
+                        const brandLabel = brandObj ? brandObj.brand : branch.brand || branch.brandCode;
+                        const storeClassObj = storeClasses.find(sc => sc.storeClassCode === branch.storeClass || sc.storeClassCode === branch.storeClassCode);
+                        const storeClassLabel = storeClassObj ? storeClassObj.storeClassification : branch.storeClass || branch.storeClassCode;
+                        return (
+                          <TableRow key={branch.branchCode + '-' + (branch.brand || '') + '-' + (branch.storeClass || '')}>
+                            <TableCell>{branch.branchCode}</TableCell>
+                            <TableCell>{branch.branchName}</TableCell>
+                            <TableCell>{brandLabel}</TableCell>
+                            <TableCell>{storeClassLabel}</TableCell>
+                            <TableCell align="center">
+                              <IconButton
+                                color="error"
+                                size="small"
+                                onClick={() => handleRemoveFromAddedList(branch.branchCode)}
+                              >
+                                <DeleteForeverIcon />
+                              </IconButton>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
                     </TableBody>
                   </Table>
                   <TablePagination
@@ -1194,3 +1294,5 @@ export default function NBFIStoreMaintenance() {
     </Box>
   );
 }
+
+

@@ -26,13 +26,16 @@ export default function NBFIListOfItems({ filters, quantities = {}, setQuantitie
   const [page, setPage] = React.useState(0);
   const [rowsPerPage, setRowsPerPage] = React.useState(10);
 
+  // Only show items where inExclusivity is true
   const rows = React.useMemo(() => {
     if (!Array.isArray(items)) return [];
-    return items.map((it) => {
-      const itemCode = it.itemCode || '';
-      const description = it.itemDescription ?? it.description ?? '';
-      return createData(itemCode, description, 0);
-    });
+    return items
+      .filter((it) => it.inExclusivity)
+      .map((it) => {
+        const itemCode = it.itemCode || '';
+        const description = it.itemDescription ?? it.description ?? '';
+        return createData(itemCode, description, 0);
+      });
   }, [items]);
 
   React.useEffect(() => {
@@ -149,7 +152,9 @@ export default function NBFIListOfItems({ filters, quantities = {}, setQuantitie
             })}
             {!loading && pagedRows.length === 0 && (
               <TableRow>
-                <TableCell colSpan={columns.length} align="center">No results found{search ? ` for "${search}"` : ''}.</TableCell>
+                <TableCell colSpan={columns.length} align="center" sx={{ color: 'text.secondary', fontStyle: 'italic' }}>
+                  No results found{search ? ` for "${search}"` : ''}.
+                  </TableCell>
               </TableRow>
             )}
           </TableBody>
