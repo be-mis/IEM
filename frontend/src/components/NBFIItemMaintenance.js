@@ -445,15 +445,18 @@ export default function NBFIItemMaintenance() {
     }
 
     try {
-      // Prepare data for Excel export
-      const failedData = uploadResults.results.failed.map(item => ({
-        'Row': item.row || 'N/A',
-        'Chain': '', // User needs to fill this
-        'Brand': '', // User needs to fill this
-        'StoreClass': '', // User needs to fill this
-        'ItemCode': item.itemCode || '',
-        'Error Reason': item.reason || ''
-      }));
+      // Prepare data for Excel export using the original uploaded row data
+      const failedData = uploadResults.results.failed.map(item => {
+        const row = item.data || {};
+        return {
+          'Row': item.row || 'N/A',
+          'Chain': row.Chain || row.chain || '',
+          'Brand': row.Brand || row.brand || '',
+          'Store Classification': row['Store Classification'] || row.storeClass || row.StoreClass || '',
+          'Item Code': row['Item Code'] || row.itemCode || item.itemCode || '',
+          'Error Reason': item.reason || ''
+        };
+      });
 
       // Create workbook and worksheet
       const wb = XLSX.utils.book_new();
@@ -464,8 +467,8 @@ export default function NBFIItemMaintenance() {
         { wch: 8 },  // Row
         { wch: 25 }, // Chain
         { wch: 20 }, // Brand
-        { wch: 30 }, // StoreClass
-        { wch: 20 }, // ItemCode
+        { wch: 30 }, // Store Classification
+        { wch: 20 }, // Item Code
         { wch: 50 }  // Error Reason
       ];
 

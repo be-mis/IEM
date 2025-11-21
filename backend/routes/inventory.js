@@ -346,7 +346,11 @@ router.post('/add-exclusivity-items', verifyToken, async (req, res) => {
     const pool = getPool();
     const { items } = req.body;
 
+    // Log the incoming payload for debugging
+    console.log('🔎 [add-exclusivity-items] Incoming items:', JSON.stringify(items, null, 2));
+
     if (!items || !Array.isArray(items) || items.length === 0) {
+      console.error('❌ [add-exclusivity-items] Items array is missing or empty');
       return res.status(400).json({ error: 'Items array is required' });
     }
 
@@ -364,13 +368,15 @@ router.post('/add-exclusivity-items', verifyToken, async (req, res) => {
         if (!chain || !category || !storeClass || !itemCode) {
           results.failed.push({
             itemCode: itemCode || 'unknown',
-            reason: 'Missing required fields: chain, category, storeClass, or itemCode'
+            reason: 'Missing required fields: chain, category, storeClass, or itemCode',
+            item
           });
           continue;
         }
 
         // Build column name by combining chain + storeClass (e.g., VChainASEH, SMHBSH, OHCSM)
         const columnName = `${chain}${storeClass}`;
+        console.log(`[add-exclusivity-items] Upserting itemCode=${itemCode}, column=${columnName}`);
 
         // Optimized INSERT using only the specific column needed
         const upsertQuery = `
@@ -378,23 +384,30 @@ router.post('/add-exclusivity-items', verifyToken, async (req, res) => {
           VALUES (?, 1)
           ON DUPLICATE KEY UPDATE ${columnName} = 1, updated_at = CURRENT_TIMESTAMP
         `;
-        
-        const [result] = await pool.execute(upsertQuery, [itemCode]);
-        
-        // Check if it was an insert (affectedRows = 1) or update (affectedRows = 2)
-        const action = result.affectedRows === 1 ? 'inserted' : 'updated';
-        
-        results.success.push({
-          itemCode,
-          action,
-          column: columnName
-        });
+        try {
+          const [result] = await pool.execute(upsertQuery, [itemCode]);
+          // Check if it was an insert (affectedRows = 1) or update (affectedRows = 2)
+          const action = result.affectedRows === 1 ? 'inserted' : 'updated';
+          results.success.push({
+            itemCode,
+            action,
+            column: columnName
+          });
+        } catch (dbError) {
+          console.error(`[add-exclusivity-items] DB error for itemCode=${itemCode}, column=${columnName}:`, dbError);
+          results.failed.push({
+            itemCode,
+            reason: dbError.message,
+            item
+          });
+        }
 
       } catch (error) {
-        console.error(`Error processing item ${item.itemCode}:`, error);
+        console.error(`[add-exclusivity-items] Error processing item ${item.itemCode}:`, error);
         results.failed.push({
           itemCode: item.itemCode,
-          reason: error.message
+          reason: error.message,
+          item
         });
       }
     }
@@ -1761,7 +1774,8 @@ router.post('/nbfi/mass-upload-exclusivity-items', verifyToken, upload.single('f
           results.failed.push({
             row: rowNumber,
             itemCode: itemCode || 'N/A',
-            reason: 'Missing required field (Chain, Store Classification, or Item Code)'
+            reason: 'Missing required field (Chain, Store Classification, or Item Code)',
+            data: row
           });
           continue;
         }
@@ -1770,7 +1784,8 @@ router.post('/nbfi/mass-upload-exclusivity-items', verifyToken, upload.single('f
           results.failed.push({
             row: rowNumber,
             itemCode,
-            reason: 'Invalid Item Code format. Only letters, numbers, dash, and underscore are allowed.'
+            reason: 'Invalid Item Code format. Only letters, numbers, dash, and underscore are allowed.',
+            data: row
           });
           continue;
         }
@@ -1784,7 +1799,8 @@ router.post('/nbfi/mass-upload-exclusivity-items', verifyToken, upload.single('f
           results.failed.push({
             row: rowNumber,
             itemCode,
-            reason: `Item Code "${itemCode}" does not exist in nbfi_item_list table.`
+            reason: `Item Code "${itemCode}" does not exist in nbfi_item_list table.`,
+            data: row
           });
           continue;
         }
@@ -1797,7 +1813,8 @@ router.post('/nbfi/mass-upload-exclusivity-items', verifyToken, upload.single('f
           results.failed.push({
             row: rowNumber,
             itemCode,
-            reason: `Invalid Chain: "${chainDesc}". Please use a valid chain description.`
+            reason: `Invalid Chain: "${chainDesc}". Please use a valid chain description.`,
+            data: row
           });
           continue;
         }
@@ -1806,7 +1823,8 @@ router.post('/nbfi/mass-upload-exclusivity-items', verifyToken, upload.single('f
           results.failed.push({
             row: rowNumber,
             itemCode,
-            reason: `Invalid Store Classification: "${storeClassDesc}". Please use a valid store classification description.`
+            reason: `Invalid Store Classification: "${storeClassDesc}". Please use a valid store classification description.`,
+            data: row
           });
           continue;
         }
@@ -1837,7 +1855,8 @@ router.post('/nbfi/mass-upload-exclusivity-items', verifyToken, upload.single('f
         results.failed.push({
           row: rowNumber,
           itemCode: row['Item Code'] || 'N/A',
-          reason: error.message
+          reason: error.message,
+          data: row
         });
       }
     }

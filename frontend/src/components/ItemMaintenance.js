@@ -186,9 +186,8 @@ export default function ItemMaintenance() {
 
     try {
       setLoadingItems(true);
-      
-      // Use the new specific endpoint for item assignment
-      const response = await axios.get(`${API_BASE_URL}/filters/items-for-assignment`, {
+      // Use the new modal-specific endpoint which returns assigned flag
+      const response = await axios.get(`${API_BASE_URL}/filters/modal-items`, {
         params: {
           chain,
           category,
@@ -233,8 +232,8 @@ export default function ItemMaintenance() {
       )
       .map(item => item.itemCode);
 
-    // Filter out already added items
-    return availableItems.filter(item => !addedItemCodes.includes(item.itemCode));
+    // Filter out already added items AND exclude items that are already assigned
+    return availableItems.filter(item => !addedItemCodes.includes(item.itemCode) && !item.assigned);
   }, [availableItems, addedItems, addItemForm.chain, addItemForm.category, addItemForm.storeClass]);
 
   // Ensure no background element retains focus when opening modals
@@ -1159,7 +1158,7 @@ export default function ItemMaintenance() {
                   fullWidth
                   size="small"
                   options={filteredAvailableItems}
-                  getOptionLabel={(option) => `${option.itemCode} - ${option.itemDescription}`}
+                  getOptionLabel={(option) => `${option.itemCode} - ${option.itemDescription}${option.assigned ? ' (assigned)' : ''}`}
                   value={filteredAvailableItems.find(item => item.itemCode === addItemForm.itemNumber) || null}
                   onChange={(event, newValue) => {
                     setAddItemForm(prev => ({
@@ -1169,6 +1168,7 @@ export default function ItemMaintenance() {
                   }}
                   disabled={!addItemForm.storeClass || loadingItems}
                   loading={loadingItems}
+                  getOptionDisabled={(option) => Boolean(option.assigned)}
                   noOptionsText={loadingItems ? "Loading items..." : filteredAvailableItems.length === 0 ? "No available items" : "No items found"}
                   renderInput={(params) => (
                     <TextField

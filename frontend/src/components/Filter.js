@@ -143,13 +143,17 @@ export default function Filter({ onChange, asForm = false, hideTransaction = fal
   const [category, setCategory] = useState('');
   useEffect(() => {
     if (!isNBFI) {
-      if (category && !brandOptions.some((o) => o.value === category)) {
+      // If the selected category no longer exists in the category options,
+      // clear dependent selections. Previously this checked `brandOptions`
+      // which caused the category to be cleared immediately; use
+      // `categoryOptions` instead.
+      if (category && !categoryOptions.some((o) => o.value === category)) {
         setCategory('');
         setStoreClass('');
         setTransaction('');
       }
     }
-  }, [category, brandOptions, isNBFI]);
+  }, [category, categoryOptions, isNBFI]);
 
   useEffect(() => {
     if (brand && !brandOptions.some((o) => o.value === brand)) {

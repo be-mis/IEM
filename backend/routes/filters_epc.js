@@ -306,4 +306,60 @@ router.get('/available-branches', async (req, res) => {
   }
 });
 
+// GET /api/filters/modal-items - Items used by Add Item modal
+// Returns items from epc_item_list for the selected category, and includes
+// an `assigned` flag indicating whether the item is already assigned
+// for the given chain+storeClass in epc_item_exclusivity_list.
+router.get('/modal-items', async (req, res) => {
+  try {
+    const { chain, storeClass, category } = req.query;
+    if (!chain || !storeClass || !category) {
+      return res.status(400).json({ error: 'Missing required parameters: chain, storeClass, category' });
+    }
+
+    // Build column name for exclusivity check
+    const prefixMap = { vchain: 'vChain', smh: 'sMH', oh: 'oH' };
+    const suffixMap = { aseh: 'ASEH', bsh: 'BSH', csm: 'CSM', dss: 'DSS', eses: 'ESES' };
+
+    const prefixKey = String(chain).trim().toLowerCase();
+    const suffixKey = String(storeClass).trim().toLowerCase();
+
+    if (!prefixMap[prefixKey] || !suffixMap[suffixKey]) {
+      return res.status(400).json({ error: 'Invalid chain or storeClass. Examples: chain=vChain|sMH|oH and storeClass=ASEH|BSH|CSM|DSS|ESES' });
+    }
+
+    const columnName = `${prefixMap[prefixKey]}${suffixMap[suffixKey]}`;
+    const categoryLower = String(category).trim().toLowerCase();
+
+    console.log(`[modal-items] Column: ${columnName}, Category: ${categoryLower}`);
+
+    const pool = getPool();
+
+    // Fetch all items from epc_item_list matching the category (case-insensitive)
+    // and left-join the exclusivity table to report assignment status.
+    const query = `
+      SELECT i.itemCode, i.itemDescription, i.itemCategory,
+             COALESCE(e.${columnName}, 0) AS assigned
+      FROM epc_item_list i
+      LEFT JOIN epc_item_exclusivity_list e ON e.itemCode = i.itemCode
+      WHERE LOWER(i.itemCategory) = ?
+      ORDER BY i.itemCode ASC
+    `;
+
+    const [rows] = await pool.execute(query, [categoryLower]);
+
+    res.json({
+      items: rows.map(r => ({
+        itemCode: r.itemCode,
+        itemDescription: r.itemDescription,
+        itemCategory: r.itemCategory,
+        assigned: Number(r.assigned) === 1
+      }))
+    });
+  } catch (err) {
+    console.error('GET /filters/modal-items error:', err);
+    res.status(500).json({ error: 'Failed to fetch modal items' });
+  }
+});
+
 module.exports = router;
