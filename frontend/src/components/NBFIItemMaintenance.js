@@ -363,24 +363,24 @@ export default function NBFIItemMaintenance() {
 
   const handleDownloadTemplate = () => {
     // Create a sample Excel template with actual data from dropdowns
-    const headers = ['Chain', 'Brand', 'StoreClass', 'ItemCode'];
+    const headers = ['Chain', 'Brand', 'Store Classification', 'Item Code'];
     const sampleData = [];
-    
+
     // Add sample rows using actual names from the dropdown data
     if (chains.length > 0 && brands.length > 0 && storeClasses.length > 0) {
       sampleData.push({
         'Chain': chains[0]?.chainName || 'Chain Name',
         'Brand': brands[0]?.brand || brands[0]?.category || 'Brand Name',
-        'StoreClass': storeClasses[0]?.storeClassification || 'Store Classification',
-        'ItemCode': 'ITEM001'
+        'Store Classification': storeClasses[0]?.storeClassification || 'Store Classification',
+        'Item Code': 'ITEM001'
       });
-      
+
       if (chains.length > 1 && brands.length > 1 && storeClasses.length > 1) {
         sampleData.push({
           'Chain': chains[1]?.chainName || 'Chain Name',
           'Brand': brands[1]?.brand || brands[1]?.category || 'Brand Name',
-          'StoreClass': storeClasses[1]?.storeClassification || 'Store Classification',
-          'ItemCode': 'ITEM002'
+          'Store Classification': storeClasses[1]?.storeClassification || 'Store Classification',
+          'Item Code': 'ITEM002'
         });
       }
     } else {
@@ -388,14 +388,14 @@ export default function NBFIItemMaintenance() {
       sampleData.push({
         'Chain': 'Chain Name',
         'Brand': 'Brand Name',
-        'StoreClass': 'Store Classification',
-        'ItemCode': 'ITEM001'
+        'Store Classification': 'Store Classification',
+        'Item Code': 'ITEM001'
       });
       sampleData.push({
         'Chain': 'Chain Name',
         'Brand': 'Brand Name',
-        'StoreClass': 'Store Classification',
-        'ItemCode': 'ITEM002'
+        'Store Classification': 'Store Classification',
+        'Item Code': 'ITEM002'
       });
     }
     

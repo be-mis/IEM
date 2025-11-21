@@ -654,6 +654,9 @@ router.post('/mass-upload-exclusivity-items', verifyToken, upload.single('file')
           results.failed.push({
             row: rowNumber,
             itemCode: itemCode || 'N/A',
+            chain: chainInput || '',
+            category: categoryInput || '',
+            storeClass: storeClassInput || '',
             reason: 'Missing required fields (Chain, Category, StoreClass, or ItemCode)'
           });
           continue;
@@ -669,6 +672,9 @@ router.post('/mass-upload-exclusivity-items', verifyToken, upload.single('file')
           results.failed.push({
             row: rowNumber,
             itemCode: itemCodeTrimmed || 'N/A',
+            chain: chainTrimmed,
+            category: categoryTrimmed,
+            storeClass: storeClassTrimmed,
             reason: 'One or more fields contain only whitespace'
           });
           continue;
@@ -679,6 +685,9 @@ router.post('/mass-upload-exclusivity-items', verifyToken, upload.single('file')
           results.failed.push({
             row: rowNumber,
             itemCode: itemCodeTrimmed,
+            chain: chainTrimmed,
+            category: categoryTrimmed,
+            storeClass: storeClassTrimmed,
             reason: 'Invalid ItemCode format. Only letters, numbers, dash, and underscore are allowed.'
           });
           continue;
@@ -694,6 +703,9 @@ router.post('/mass-upload-exclusivity-items', verifyToken, upload.single('file')
           results.failed.push({
             row: rowNumber,
             itemCode: itemCodeTrimmed,
+            chain: chainTrimmed,
+            category: categoryTrimmed,
+            storeClass: storeClassTrimmed,
             reason: `Invalid Chain: "${chainTrimmed}". Please use valid chain name or code.`
           });
           continue;
@@ -703,6 +715,9 @@ router.post('/mass-upload-exclusivity-items', verifyToken, upload.single('file')
           results.failed.push({
             row: rowNumber,
             itemCode: itemCodeTrimmed,
+            chain: chainTrimmed,
+            category: categoryTrimmed,
+            storeClass: storeClassTrimmed,
             reason: `Invalid Category: "${categoryTrimmed}". Please use valid category name.`
           });
           continue;
@@ -712,6 +727,9 @@ router.post('/mass-upload-exclusivity-items', verifyToken, upload.single('file')
           results.failed.push({
             row: rowNumber,
             itemCode: itemCodeTrimmed,
+            chain: chainTrimmed,
+            category: categoryTrimmed,
+            storeClass: storeClassTrimmed,
             reason: `Invalid Store Class: "${storeClassTrimmed}". Please use valid store classification or code.`
           });
           continue;
@@ -729,6 +747,9 @@ router.post('/mass-upload-exclusivity-items', verifyToken, upload.single('file')
             results.failed.push({
               row: rowNumber,
               itemCode: itemCodeTrimmed,
+              chain: chainTrimmed,
+              category: categoryTrimmed,
+              storeClass: storeClassTrimmed,
               reason: `ItemCode "${itemCodeTrimmed}" does not exist in epc_item_list table. Please verify the item code.`
             });
             continue;
@@ -738,6 +759,9 @@ router.post('/mass-upload-exclusivity-items', verifyToken, upload.single('file')
           results.failed.push({
             row: rowNumber,
             itemCode: itemCodeTrimmed,
+            chain: chainTrimmed,
+            category: categoryTrimmed,
+            storeClass: storeClassTrimmed,
             reason: `Database error while validating ItemCode: ${itemCheckError.message}`
           });
           continue;
@@ -760,6 +784,9 @@ router.post('/mass-upload-exclusivity-items', verifyToken, upload.single('file')
             results.failed.push({
               row: rowNumber,
               itemCode: itemCodeTrimmed,
+              chain: chainTrimmed,
+              category: categoryTrimmed,
+              storeClass: storeClassTrimmed,
               reason: `Invalid combination: Column "${columnName}" does not exist in database. Chain "${chainTrimmed}" and StoreClass "${storeClassTrimmed}" cannot be combined.`
             });
             continue;
@@ -769,6 +796,9 @@ router.post('/mass-upload-exclusivity-items', verifyToken, upload.single('file')
           results.failed.push({
             row: rowNumber,
             itemCode: itemCodeTrimmed,
+            chain: chainTrimmed,
+            category: categoryTrimmed,
+            storeClass: storeClassTrimmed,
             reason: `Database error while validating combination: ${colCheckError.message}`
           });
           continue;
@@ -797,6 +827,9 @@ router.post('/mass-upload-exclusivity-items', verifyToken, upload.single('file')
         results.failed.push({
           row: rowNumber,
           itemCode: row.ItemCode || row.itemCode || 'N/A',
+          chain: row.Chain || row.chain || '',
+          category: row.Category || row.category || '',
+          storeClass: row.StoreClass || row.storeClass || '',
           reason: error.message
         });
       }
@@ -1693,127 +1726,117 @@ router.post('/nbfi/mass-upload-exclusivity-items', verifyToken, upload.single('f
       skipped: []
     };
 
+    // Fetch chain and store class mappings
+    const [chainRows] = await pool.execute('SELECT chainCode, chainName FROM nbfi_chains');
+    const [storeClassRows] = await pool.execute('SELECT storeClassCode, storeClassification FROM nbfi_store_class');
+    // Map: description (upper) -> code (upper)
+    const chainMap = new Map();
+    chainRows.forEach(row => {
+      chainMap.set(row.chainName.trim().toUpperCase(), row.chainCode.toUpperCase());
+      chainMap.set(row.chainCode.toUpperCase(), row.chainCode.toUpperCase());
+    });
+    const storeClassMap = new Map();
+    storeClassRows.forEach(row => {
+      storeClassMap.set(row.storeClassification.trim().toUpperCase(), row.storeClassCode.toUpperCase());
+      storeClassMap.set(row.storeClassCode.toUpperCase(), row.storeClassCode.toUpperCase());
+    });
+    const allowedStoreTypes = ['ASEH','BSH','CSM','DSS','ESES'];
+    const allowedChains = ['SM', 'RDS', 'WDS'];
+
     for (let i = 0; i < data.length; i++) {
       const row = data[i];
       const rowNumber = i + 2;
-
       try {
-        const storeCode = row.StoreCode || row.storeCode || row.STORECODE || row['Store Code'];
-        const itemCode = row.ItemCode || row.itemCode || row.ITEMCODE || row['Item Code'];
+        // Excel columns: Chain (description), Brand, Store Classification (description), Item Code
+        const chainDesc = (row.Chain || '').toString().trim();
+        const brand = (row.Brand || '').toString().trim();
+        const storeClassDesc = (row['Store Classification'] || '').toString().trim();
+        const itemCode = (row['Item Code'] || '').toString().trim();
 
-        if (!storeCode || !itemCode) {
+        // Debug: log raw row input
+        console.log(`[DEBUG][Row ${rowNumber}] Input:`, { chainDesc, brand, storeClassDesc, itemCode });
+
+        if (!chainDesc || !storeClassDesc || !itemCode) {
+          console.log(`[DEBUG][Row ${rowNumber}] Missing required field. chainDesc: '${chainDesc}', storeClassDesc: '${storeClassDesc}', itemCode: '${itemCode}'`);
           results.failed.push({
             row: rowNumber,
             itemCode: itemCode || 'N/A',
-            storeCode: storeCode || 'N/A',
-            reason: 'Missing required fields (StoreCode or ItemCode)'
+            reason: 'Missing required field (Chain, Store Classification, or Item Code)'
           });
           continue;
         }
-
-        const storeCodeTrimmed = String(storeCode).trim();
-        const itemCodeTrimmed = String(itemCode).trim();
-
-        if (!storeCodeTrimmed || !itemCodeTrimmed) {
+        if (!/^[A-Z0-9_-]+$/i.test(itemCode)) {
+          console.log(`[DEBUG][Row ${rowNumber}] Invalid Item Code format: '${itemCode}'`);
           results.failed.push({
             row: rowNumber,
-            itemCode: itemCodeTrimmed || 'N/A',
-            storeCode: storeCodeTrimmed || 'N/A',
-            reason: 'One or more fields contain only whitespace'
+            itemCode,
+            reason: 'Invalid Item Code format. Only letters, numbers, dash, and underscore are allowed.'
           });
           continue;
         }
-
-        // Validate ItemCode format
-        if (!/^[A-Z0-9_-]+$/i.test(itemCodeTrimmed)) {
-          results.failed.push({
-            row: rowNumber,
-            itemCode: itemCodeTrimmed,
-            storeCode: storeCodeTrimmed,
-            reason: 'Invalid ItemCode format. Only letters, numbers, dash, and underscore are allowed.'
-          });
-          continue;
-        }
-
-        // Check if ItemCode exists in nbfi_item_list table
-        const [itemExists] = await pool.execute(`
-          SELECT itemCode 
-          FROM nbfi_item_list 
-          WHERE itemCode = ?
-        `, [itemCodeTrimmed]);
-        
+        // Check if Item Code exists in nbfi_item_list table
+        const [itemExists] = await pool.execute(
+          'SELECT itemCode FROM nbfi_item_list WHERE itemCode = ?',
+          [itemCode]
+        );
         if (itemExists.length === 0) {
+          console.log(`[DEBUG][Row ${rowNumber}] Item Code not found in nbfi_item_list: '${itemCode}'`);
           results.failed.push({
             row: rowNumber,
-            itemCode: itemCodeTrimmed,
-            storeCode: storeCodeTrimmed,
-            reason: `ItemCode "${itemCodeTrimmed}" does not exist in nbfi_item_list table.`
+            itemCode,
+            reason: `Item Code "${itemCode}" does not exist in nbfi_item_list table.`
           });
           continue;
         }
-
-        // Check if StoreCode exists in nbfi_stores table
-        const [storeExists] = await pool.execute(`
-          SELECT storeCode 
-          FROM nbfi_stores 
-          WHERE storeCode = ?
-        `, [storeCodeTrimmed]);
-        
-        if (storeExists.length === 0) {
+        // Map chain and store class description to code
+        const chainCode = chainMap.get(chainDesc.toUpperCase());
+        const storeType = storeClassMap.get(storeClassDesc.toUpperCase());
+        console.log(`[DEBUG][Row ${rowNumber}] Mapped chainDesc='${chainDesc}' → chainCode='${chainCode}', storeClassDesc='${storeClassDesc}' → storeType='${storeType}'`);
+        if (!chainCode) {
+          console.log(`[DEBUG][Row ${rowNumber}] Invalid Chain: '${chainDesc}'`);
           results.failed.push({
             row: rowNumber,
-            itemCode: itemCodeTrimmed,
-            storeCode: storeCodeTrimmed,
-            reason: `StoreCode "${storeCodeTrimmed}" does not exist in nbfi_stores table.`
+            itemCode,
+            reason: `Invalid Chain: "${chainDesc}". Please use a valid chain description.`
           });
           continue;
         }
-
-        // Determine storeType for this store (ASEH|BSH|CSM|DSS|ESES) - attempt to derive from nbfi_stores.categoryClass
-        const [storeRow] = await pool.execute(`SELECT categoryClass FROM nbfi_stores WHERE storeCode = ? LIMIT 1`, [storeCodeTrimmed]);
-        let storeType = (Array.isArray(storeRow) && storeRow.length > 0) ? String(storeRow[0].categoryClass || '').trim().toUpperCase() : '';
-        const allowedTypes = ['ASEH','BSH','CSM','DSS','ESES'];
-        if (!allowedTypes.includes(storeType)) {
-          // fallback to request-level column or default to ASEH
-          storeType = (req.body.storeType || req.body.category || '').toString().trim().toUpperCase();
+        if (!storeType || !allowedStoreTypes.includes(storeType)) {
+          console.log(`[DEBUG][Row ${rowNumber}] Invalid Store Classification: '${storeClassDesc}' → '${storeType}'`);
+          results.failed.push({
+            row: rowNumber,
+            itemCode,
+            reason: `Invalid Store Classification: "${storeClassDesc}". Please use a valid store classification description.`
+          });
+          continue;
         }
-        if (!allowedTypes.includes(storeType)) {
-          storeType = 'ASEH';
-        }
-
-        // Determine chain for this upload (default to SM if not specified)
-        const allowedChains = ['SM', 'RDS', 'WDS'];
-        const chain = String(req.body.chain || req.query.chain || 'SM').trim().toUpperCase();
-        const tableName = allowedChains.includes(chain) ? `nbfi_${chain.toLowerCase()}_item_exclusivity_list` : 'nbfi_sm_item_exclusivity_list';
-        
+        // Determine table name
+        const tableName = allowedChains.includes(chainCode) ? `nbfi_${chainCode.toLowerCase()}_item_exclusivity_list` : 'nbfi_sm_item_exclusivity_list';
         // Ensure column exists
         const [colCheck] = await pool.execute(
-          `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?`,
+          'SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?',
           [tableName, storeType]
         );
         if (!Array.isArray(colCheck) || colCheck.length === 0) {
-          // Add column automatically if missing
+          console.log(`[DEBUG][Row ${rowNumber}] Column '${storeType}' does not exist in table '${tableName}', adding column.`);
           await pool.execute(`ALTER TABLE ${tableName} ADD COLUMN \`${storeType}\` VARCHAR(10) NULL`);
         }
-
-        // Upsert into chain-specific exclusivity table: set the storeType flag for this itemCode
+        // Upsert: set the storeType flag for this itemCode
         const updateQuery = `UPDATE ${tableName} SET \`${storeType}\` = '1', updated_at = CURRENT_TIMESTAMP WHERE itemCode = ?`;
-        const [updateRes] = await pool.execute(updateQuery, [itemCodeTrimmed]);
+        const [updateRes] = await pool.execute(updateQuery, [itemCode]);
         let action = 'updated';
         if (updateRes.affectedRows === 0) {
           const insertQuery = `INSERT INTO ${tableName} (itemCode, \`${storeType}\`) VALUES (?, '1')`;
-          await pool.execute(insertQuery, [itemCodeTrimmed]);
+          await pool.execute(insertQuery, [itemCode]);
           action = 'inserted';
         }
-
-        results.success.push({ row: rowNumber, itemCode: itemCodeTrimmed, storeCode: storeCodeTrimmed, storeType, action });
-
+        console.log(`[DEBUG][Row ${rowNumber}] Success: itemCode='${itemCode}', chainCode='${chainCode}', storeType='${storeType}', action='${action}'`);
+        results.success.push({ row: rowNumber, itemCode, chain: chainCode, storeType, brand, action });
       } catch (error) {
-        console.error(`Error processing row ${rowNumber}:`, error);
+        console.error(`[DEBUG][Row ${rowNumber}] Error:`, error);
         results.failed.push({
           row: rowNumber,
-          itemCode: row.ItemCode || row.itemCode || 'N/A',
-          storeCode: row.StoreCode || row.storeCode || 'N/A',
+          itemCode: row['Item Code'] || 'N/A',
           reason: error.message
         });
       }

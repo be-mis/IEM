@@ -457,13 +457,13 @@ export default function ItemMaintenance() {
     }
 
     try {
-      // Prepare data for Excel export
+      // Prepare data for Excel export, including Chain, Category, StoreClass if present
       const failedData = uploadResults.results.failed.map(item => ({
         'Row': item.row || 'N/A',
-        'Chain': '', // User needs to fill this
-        'Category': '', // User needs to fill this
-        'StoreClass': '', // User needs to fill this
-        'ItemCode': item.itemCode || '',
+        'Chain': item.Chain || item.chain || '',
+        'Category': item.Category || item.category || '',
+        'StoreClass': item.StoreClass || item.storeClass || '',
+        'ItemCode': item.ItemCode || item.itemCode || '',
         'Error Reason': item.reason || ''
       }));
 
