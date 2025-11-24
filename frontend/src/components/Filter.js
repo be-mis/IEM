@@ -187,6 +187,12 @@ export default function Filter({ onChange, asForm = false, hideTransaction = fal
     setTransaction('');
   }, []);
 
+  const handleCategoryChange = useCallback((e) => {
+    setCategory(e.target.value);
+    setStoreClass('');
+    setTransaction('');
+  }, []);
+
   const handleStoreClassChange = useCallback((e) => {
     setStoreClass(e.target.value);
     setTransaction('');
@@ -271,7 +277,7 @@ export default function Filter({ onChange, asForm = false, hideTransaction = fal
               labelId="filter-brand"
               value={isNBFI ? brand : category}
               label={categoryLabel}
-              onChange={isNBFI ? handleBrandChange : (e) => setCategory(e.target.value)}
+              onChange={isNBFI ? handleBrandChange : handleCategoryChange}
               renderValue={(v) =>
                 v
                   ? (isNBFI

@@ -8,7 +8,8 @@ import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import { 
   StoreMallDirectoryOutlined, 
   InventoryOutlined, 
-  DisabledByDefaultOutlined 
+  DisabledByDefaultOutlined,
+  TuneOutlined
 } from '@mui/icons-material';
 
 import Filter from '../components/Filter';
@@ -117,20 +118,29 @@ export default function NBFIExclusivityForm() {
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
       {/* Filter and Export Button Row */}
-      <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
-        <Box sx={{ flex: 1 }}>
-          <Filter onChange={handleFilterChange} categoryLabel="Brand" isNBFI={true} />
+      <Box component="form" noValidate autoComplete="off">
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+          <TuneOutlined />
+          <strong>Parameter</strong>
         </Box>
-        <Button
-          variant="contained"
-          color="primary"
-          size="large"
-          startIcon={<FileDownloadIcon />}
-          onClick={handleExport}
-          disabled={branchesLoading || itemsLoading || !filters.transaction}
-        >
-          Export to Excel
-        </Button>
+
+        <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+          <Box sx={{ flex: 1 }}>
+            <Filter onChange={handleFilterChange} categoryLabel="Brand" isNBFI={true} />
+          </Box>
+
+          <Button
+            variant="contained"
+            color="primary"
+            size="large"
+            sx={{ alignSelf: 'flex-start' }}
+            startIcon={<FileDownloadIcon />}
+            onClick={handleExport}
+            disabled={branchesLoading || itemsLoading || !filters.transaction}
+          >
+            Export to Excel
+          </Button>
+        </Box>
       </Box>
 
       {/* List of Stores */}

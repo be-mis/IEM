@@ -161,10 +161,20 @@ export default function StoreMaintenance() {
   };
 
   const handleAddBranchFormChange = (field, value) => {
-    setAddBranchForm(prev => ({ ...prev, [field]: value }));
-    if (field !== 'branchCode') {
-      setAddBranchForm(prev => ({ ...prev, branchCode: '' }));
-    }
+    setAddBranchForm(prev => {
+      if (field === 'chain') {
+        // Selecting a different chain should clear dependent selects
+        return { ...prev, chain: value, category: '', storeClass: '', branchCode: '' };
+      }
+      if (field === 'category') {
+        // When category changes, clear store classification and selected branch
+        return { ...prev, category: value, storeClass: '', branchCode: '' };
+      }
+      if (field !== 'branchCode') {
+        return { ...prev, [field]: value, branchCode: '' };
+      }
+      return { ...prev, [field]: value };
+    });
   };
 
   const handleAddBranchToList = () => {
