@@ -1,7 +1,27 @@
 const express = require('express');
 const router = express.Router();
 const { getPool } = require('../config/database');
+const { getAllowedChains } = require('../utils/nbfiChains');
 const mysql = require('mysql2');
+// NBFI naming normalization middleware
+// Accept `storeClassification` from frontend and map to internal `storeClass` query/body param
+router.use((req, res, next) => {
+  try {
+    if (req.query) {
+      if (req.query.storeClassification && !req.query.storeClass) {
+        req.query.storeClass = req.query.storeClassification;
+      }
+    }
+    if (req.body) {
+      if (req.body.storeClassification && !req.body.storeClass) {
+        req.body.storeClass = req.body.storeClassification;
+      }
+    }
+  } catch (e) {
+    // continue even if normalization fails
+  }
+  return next();
+});
 // GET /api/filters/nbfi/modal-stores (exclusive for Add Store modal)
 router.get('/nbfi/modal-stores', async (req, res) => {
   try {
@@ -329,8 +349,8 @@ router.get('/nbfi/items-for-assignment', async (req, res) => {
     storeClass = String(storeClass).trim().toUpperCase();
     brand = String(brand).trim();
 
-    const allowedChains = ['SM', 'RDS', 'WDS'];
     const allowedStoreClasses = ['ASEH', 'BSH', 'CSM', 'DSS', 'ESES'];
+    const allowedChains = await getAllowedChains(getPool());
 
     if (!allowedChains.includes(chain)) {
       return res.status(400).json({ error: `Invalid chain. Must be one of: ${allowedChains.join(', ')}` });

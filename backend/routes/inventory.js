@@ -6,6 +6,7 @@ const { logAudit, getIp } = require('../utils/auditLogger');
 const { verifyToken } = require('../middleware/auth');
 const multer = require('multer');
 const XLSX = require('xlsx');
+const { getAllowedChains } = require('../utils/nbfiChains');
 
 // Configure multer for file uploads
 const upload = multer({ 
@@ -763,7 +764,7 @@ router.post('/mass-upload-exclusivity-items', verifyToken, upload.single('file')
               chain: chainTrimmed,
               category: categoryTrimmed,
               storeClass: storeClassTrimmed,
-              reason: `ItemCode "${itemCodeTrimmed}" does not exist in epc_item_list table. Please verify the item code.`
+              reason: `Item Code "${itemCodeTrimmed}" does not exist in the Item List.`
             });
             continue;
           }
@@ -1218,6 +1219,14 @@ router.post('/mass-upload-exclusivity-branches', verifyToken, upload.single('fil
       storeClassMap.set(storeClass.storeClassification.toLowerCase().trim(), storeClass.storeClassCode);
     });
 
+    // Prefetch existing stores referenced in the file to validate existence and avoid per-row queries
+    const fileBranchCodes = data.map(r => (r['Store Code'] || '').toString().trim()).filter(Boolean);
+    const uniqueBranchCodes = Array.from(new Set(fileBranchCodes));
+    const [existingStores] = uniqueBranchCodes.length > 0
+      ? await pool.query('SELECT storeCode FROM epc_stores WHERE storeCode IN (?)', [uniqueBranchCodes])
+      : [ [] ];
+    const existingSet = new Set((existingStores || []).map(s => s.storeCode));
+
     // Process each row
     for (let i = 0; i < data.length; i++) {
       const row = data[i];
@@ -1228,10 +1237,6 @@ router.post('/mass-upload-exclusivity-branches', verifyToken, upload.single('fil
       
       if (!row['Store Code'] || row['Store Code'].toString().trim() === '') {
         errors.push('Store Code is required');
-      }
-      
-      if (!row.Chain || row.Chain.toString().trim() === '') {
-        errors.push('Chain is required');
       }
 
       if (errors.length > 0) {
@@ -1248,7 +1253,7 @@ router.post('/mass-upload-exclusivity-branches', verifyToken, upload.single('fil
       // Trim and prepare values
       const branchCode = row['Store Code'].toString().trim();
       const branchName = row['Store Description'] ? row['Store Description'].toString().trim() : '';
-      const chainName = row.Chain.toString().trim();
+      const chainName = row.Chain ? row.Chain.toString().trim() : '';
       
       // Optional category class fields - now accepting store codes directly
       const lampsClass = row.LampsClass ? row.LampsClass.toString().trim() : '';
@@ -1258,10 +1263,9 @@ router.post('/mass-upload-exclusivity-branches', verifyToken, upload.single('fil
       const framesClass = row.FramesClass ? row.FramesClass.toString().trim() : '';
 
       // Convert chain name to code
-      const chainCode = chainMap.get(chainName.toLowerCase());
-
-      // Validate chain
-      if (!chainCode) {
+      const chainCode = chainName ? chainMap.get(chainName.toLowerCase()) : null;
+      // Validate chain only if provided (Chain is optional)
+      if (chainName && !chainCode) {
         errors.push(`Invalid Chain: "${chainName}"`);
       }
 
@@ -1319,45 +1323,40 @@ router.post('/mass-upload-exclusivity-branches', verifyToken, upload.single('fil
         continue;
       }
 
-      // Check if the store exists in the database using storeCode
-      const [storeCheck] = await pool.query(
-        'SELECT storeCode, storeName FROM epc_stores WHERE storeCode = ?',
-        [branchCode]
-      );
-
-      const storeExists = storeCheck.length > 0;
-      const actualStoreName = storeExists ? storeCheck[0].storeName : branchName;
+      // Ensure the store code exists in the system; if not, treat as validation failure
+      const storeExists = existingSet.has(branchCode);
+      if (!storeExists) {
+        results.failed.push({
+          row: rowNum,
+          branchCode: branchCode || 'N/A',
+          data: row,
+          errors: [`Store Code does not exist: "${branchCode}"`],
+          reason: `Store Code does not exist: "${branchCode}"`
+        });
+        continue;
+      }
 
       // Insert or Update the branch with chain and category classifications
       try {
-        if (storeExists) {
-          // Update existing store
-          await pool.query(
-            `UPDATE epc_stores 
-             SET chainCode = ?, lampsClass = ?, decorsClass = ?, clocksClass = ?, stationeryClass = ?, framesClass = ?
-             WHERE storeCode = ?`,
-            [chainCode, lampsClassCode, decorsClassCode, clocksClassCode, stationeryClassCode, framesClassCode, branchCode]
-          );
-        } else {
-          // Insert new store
-          await pool.query(
-            `INSERT INTO epc_stores (storeCode, storeName, chainCode, lampsClass, decorsClass, clocksClass, stationeryClass, framesClass)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-            [branchCode, actualStoreName, chainCode, lampsClassCode, decorsClassCode, clocksClassCode, stationeryClassCode, framesClassCode]
-          );
-        }
+        // Update existing store
+        await pool.query(
+          `UPDATE epc_stores 
+           SET chainCode = COALESCE(?, chainCode), lampsClass = ?, decorsClass = ?, clocksClass = ?, stationeryClass = ?, framesClass = ?
+           WHERE storeCode = ?`,
+          [chainCode, lampsClassCode, decorsClassCode, clocksClassCode, stationeryClassCode, framesClassCode, branchCode]
+        );
 
         results.success.push({
           row: rowNum,
           branchCode: branchCode,
-          branchName: actualStoreName,
+          branchName: branchName || '',
           chain: chainName,
           lampsClass: lampsClass || 'N/A',
           decorsClass: decorsClass || 'N/A',
           clocksClass: clocksClass || 'N/A',
           stationeryClass: stationeryClass || 'N/A',
           framesClass: framesClass || 'N/A',
-          action: storeExists ? 'Updated' : 'Created'
+          action: 'Updated'
         });
       } catch (error) {
         results.failed.push({
@@ -1432,11 +1431,23 @@ router.post('/mass-upload-exclusivity-branches', verifyToken, upload.single('fil
 
   } catch (error) {
     console.error('Error during mass upload:', error);
-    
-    res.status(500).json({ 
+    // Include partial results/summary if available so frontend can show failed rows
+    const payload = {
       error: 'Failed to process mass upload',
-      message: error.message 
-    });
+      message: error.message
+    };
+    try {
+      if (typeof results !== 'undefined') payload.results = results;
+      if (typeof data !== 'undefined' && Array.isArray(data)) {
+        payload.summary = payload.summary || {};
+        payload.summary.total = data.length;
+        payload.summary.success = results ? (results.success || []).length : 0;
+        payload.summary.failed = results ? (results.failed || []).length : 0;
+      }
+    } catch (e) {
+      // ignore
+    }
+    res.status(500).json(payload);
   }
 });
 
@@ -1462,11 +1473,11 @@ router.post('/nbfi/add-exclusivity-items', verifyToken, async (req, res) => {
 
     // New schema: chain-specific exclusivity tables contain per-item flags for store types: ASEH, BSH, CSM, DSS, ESES.
     // Expect callers to provide either a `storeType` field (ASEH|BSH|CSM|DSS|ESES) per item or an overall
-    // `storeType` in the request body. For backward compatibility, if only `storeCode` is given,
-    // attempt to derive the storeType from `nbfi_stores.categoryClass`.
+    // `storeType` in the request body. Note: we do NOT use `nbfi_stores.categoryClass` (brands are stored
+    // as individual `brand_<slug>` columns). If `storeType` is not provided, treat as missing.
     const allowedTypes = ['ASEH', 'BSH', 'CSM', 'DSS', 'ESES'];
-    const allowedChains = ['SM', 'RDS', 'WDS'];
     const requestLevelStoreType = (req.body.storeType || req.body.category || '') + '';
+    const allowedChains = await getAllowedChains(pool);
     const chain = String(req.body.chain || req.query.chain || 'SM').trim().toUpperCase();
     
     if (!allowedChains.includes(chain)) {
@@ -1495,13 +1506,8 @@ router.post('/nbfi/add-exclusivity-items', verifyToken, async (req, res) => {
 
         // Determine the storeType to set for this item
         let storeType = (itemStoreType || requestLevelStoreType || '').toString().trim().toUpperCase();
-        if (!storeType && storeCode) {
-          // Try to derive from nbfi_stores.categoryClass
-          const [rows] = await pool.execute(`SELECT categoryClass FROM nbfi_stores WHERE storeCode = ? LIMIT 1`, [storeCode]);
-          if (Array.isArray(rows) && rows.length > 0) {
-            storeType = String(rows[0].categoryClass || '').trim().toUpperCase();
-          }
-        }
+        // Do not attempt to read non-existent `categoryClass` column from `nbfi_stores`.
+        // If storeType is still empty, fail validation so callers must explicitly provide it.
 
         if (!allowedTypes.includes(storeType)) {
           results.failed.push({ itemCode, storeCode: storeCode || null, reason: `Invalid or missing storeType (must be one of: ${allowedTypes.join(', ')})` });
@@ -1620,7 +1626,7 @@ router.post('/nbfi/remove-exclusivity-item', verifyToken, async (req, res) => {
       return res.status(400).json({ error: 'itemCode is required' });
     }
     
-    const allowedChains = ['SM', 'RDS', 'WDS'];
+    const allowedChains = await getAllowedChains(pool);
     const chain = String(reqChain || req.query.chain || 'SM').trim().toUpperCase();
     
     if (!allowedChains.includes(chain)) {
@@ -1640,14 +1646,8 @@ router.post('/nbfi/remove-exclusivity-item', verifyToken, async (req, res) => {
 
     const allowedTypes = ['ASEH', 'BSH', 'CSM', 'DSS', 'ESES'];
     let type = (storeType || '').toString().trim().toUpperCase();
-    if (!type && storeCode) {
-      // attempt to derive storeType from nbfi_stores.categoryClass
-      const [rows] = await pool.execute(`SELECT categoryClass FROM nbfi_stores WHERE storeCode = ? LIMIT 1`, [storeCode]);
-      if (Array.isArray(rows) && rows.length > 0) {
-        type = String(rows[0].categoryClass || '').trim().toUpperCase();
-      }
-    }
-
+    // Do not attempt to read `categoryClass` from nbfi_stores (brands are stored as brand_<slug> columns).
+    // Require callers to provide `storeType` explicitly. If missing/invalid, return an error.
     if (!allowedTypes.includes(type)) {
       return res.status(400).json({ error: `storeType is required and must be one of: ${allowedTypes.join(', ')}` });
     }
@@ -1754,7 +1754,7 @@ router.post('/nbfi/mass-upload-exclusivity-items', verifyToken, upload.single('f
       storeClassMap.set(row.storeClassCode.toUpperCase(), row.storeClassCode.toUpperCase());
     });
     const allowedStoreTypes = ['ASEH','BSH','CSM','DSS','ESES'];
-    const allowedChains = ['SM', 'RDS', 'WDS'];
+    const allowedChains = await getAllowedChains(pool);
 
     for (let i = 0; i < data.length; i++) {
       const row = data[i];
@@ -1799,7 +1799,7 @@ router.post('/nbfi/mass-upload-exclusivity-items', verifyToken, upload.single('f
           results.failed.push({
             row: rowNumber,
             itemCode,
-            reason: `Item Code "${itemCode}" does not exist in nbfi_item_list table.`,
+            reason: `Item Code "${itemCode}" does not exist in the Item List.`,
             data: row
           });
           continue;
@@ -2177,20 +2177,20 @@ router.post('/nbfi/mass-upload-exclusivity-branches', verifyToken, upload.single
       failed: []
     };
 
-    // Get all chains and categories for validation
+    // Get all chains and store classes for validation (we will store Store Classification in nbfi_stores.storeClassification)
     const [chains] = await pool.query('SELECT chainCode, chainName FROM nbfi_chains');
-    const [categories] = await pool.query('SELECT catCode, category FROM nbfi_categories');
+    const [storeClassRows] = await pool.query('SELECT storeClassCode, storeClassification FROM nbfi_store_class');
 
     const chainMap = new Map();
     chains.forEach(chain => {
-      chainMap.set(chain.chainName.toLowerCase().trim(), chain.chainCode);
-      chainMap.set(chain.chainCode.toLowerCase().trim(), chain.chainCode);
+      if (chain && chain.chainName) chainMap.set(chain.chainName.toLowerCase().trim(), chain.chainCode);
+      if (chain && chain.chainCode) chainMap.set(chain.chainCode.toLowerCase().trim(), chain.chainCode);
     });
 
-    const categoryMap = new Map();
-    categories.forEach(cat => {
-      categoryMap.set(cat.category.toLowerCase().trim(), cat.catCode);
-      categoryMap.set(cat.catCode.toLowerCase().trim(), cat.catCode);
+    const storeClassMap = new Map();
+    storeClassRows.forEach(sc => {
+      if (sc && sc.storeClassification) storeClassMap.set(sc.storeClassification.toLowerCase().trim(), sc.storeClassCode);
+      if (sc && sc.storeClassCode) storeClassMap.set(sc.storeClassCode.toLowerCase().trim(), sc.storeClassCode);
     });
 
     for (let i = 0; i < data.length; i++) {
@@ -2217,22 +2217,42 @@ router.post('/nbfi/mass-upload-exclusivity-branches', verifyToken, upload.single
       const storeCode = row['Store Code'].toString().trim();
       const storeName = row['Store Description'] ? row['Store Description'].toString().trim() : '';
       const chainInput = row.Chain ? row.Chain.toString().trim() : '';
-      const categoryInput = row.Category ? row.Category.toString().trim() : '';
+      // Accept either 'Store Classification' or legacy 'Category' column for NBFI uploads
+      const storeClassInput = row['Store Classification'] ? row['Store Classification'].toString().trim() : (row.StoreClass ? row.StoreClass.toString().trim() : (row.Category ? row.Category.toString().trim() : ''));
+      // Also accept 'Brand' column to set per-brand column value (brand_<slug>)
+      const brandInput = row.Brand ? row.Brand.toString().trim() : (row.brand ? row.brand.toString().trim() : '');
 
       let chainCode = null;
-      let categoryClass = null;
+      let storeClassCode = null; // the store class code from nbfi_store_class
+      let brandCol = null; // optional brand_<slug> column name
+      const sanitize = s => String(s || '').trim().replace(/\s+/g, '_').replace(/[^A-Za-z0-9_]/g, '').toLowerCase();
 
       if (chainInput) {
-        chainCode = chainMap.get(chainInput.toLowerCase());
-        if (!chainCode) {
-          errors.push(`Invalid Chain: "${chainInput}"`);
+        chainCode = chainMap.get(chainInput.toLowerCase()) || null;
+      }
+
+      if (storeClassInput) {
+        storeClassCode = storeClassMap.get(storeClassInput.toLowerCase()) || null;
+        if (!storeClassCode) {
+          errors.push(`Invalid Store Classification: "${storeClassInput}"`);
         }
       }
 
-      if (categoryInput) {
-        categoryClass = categoryMap.get(categoryInput.toLowerCase());
-        if (!categoryClass) {
-          errors.push(`Invalid Category: "${categoryInput}"`);
+      // If brand provided, determine brand column and validate it exists
+      if (brandInput) {
+        const col = `brand_${sanitize(brandInput)}`;
+        try {
+          const [colCheck] = await pool.execute(
+            `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'nbfi_stores' AND COLUMN_NAME = ?`,
+            [col]
+          );
+          if (!Array.isArray(colCheck) || colCheck.length === 0) {
+            errors.push(`Invalid Brand or missing brand column: "${brandInput}" (expected ${col})`);
+          } else {
+            brandCol = col;
+          }
+        } catch (e) {
+          errors.push(`Database error validating brand column for "${brandInput}": ${e.message}`);
         }
       }
 
@@ -2247,7 +2267,7 @@ router.post('/nbfi/mass-upload-exclusivity-branches', verifyToken, upload.single
         continue;
       }
 
-      // Check if store exists
+      // Check if store exists - for NBFI we DO NOT create new stores from mass upload.
       const [storeCheck] = await pool.query(
         'SELECT storeCode, storeName FROM nbfi_stores WHERE storeCode = ?',
         [storeCode]
@@ -2257,28 +2277,42 @@ router.post('/nbfi/mass-upload-exclusivity-branches', verifyToken, upload.single
       const actualStoreName = storeExists ? storeCheck[0].storeName : storeName;
 
       try {
-        if (storeExists) {
-          await pool.query(
-            `UPDATE nbfi_stores 
-             SET storeName = ?, chainCode = ?, categoryClass = ?, updated_at = CURRENT_TIMESTAMP
-             WHERE storeCode = ?`,
-            [actualStoreName, chainCode, categoryClass, storeCode]
-          );
-        } else {
-          await pool.query(
-            `INSERT INTO nbfi_stores (storeCode, storeName, chainCode, categoryClass)
-             VALUES (?, ?, ?, ?)`,
-            [storeCode, actualStoreName, chainCode, categoryClass]
-          );
+        if (!storeExists) {
+          results.failed.push({
+            row: rowNum,
+            storeCode: storeCode,
+            data: row,
+            errors: [`Store Code does not exist: "${storeCode}"`],
+            reason: `Store Code does not exist: "${storeCode}"`
+          });
+          continue;
         }
+
+        // Update existing store only (do not insert new rows)
+        // Build dynamic update: set storeName, chainCode, optionally storeClassification and brand_<slug>
+        const setClauses = ['storeName = ?', 'chainCode = ?'];
+        const params = [actualStoreName, chainCode];
+        if (storeClassCode) {
+          setClauses.push('storeClassification = ?');
+          params.push(storeClassCode);
+        }
+        if (brandCol && storeClassCode) {
+          // set per-brand column to the same storeClassCode (e.g., brand_barbizon = ASEH)
+          setClauses.push(`\`${brandCol}\` = ?`);
+          params.push(storeClassCode);
+        }
+        setClauses.push('updated_at = CURRENT_TIMESTAMP');
+        const updateSql = `UPDATE nbfi_stores SET ${setClauses.join(', ')} WHERE storeCode = ?`;
+        params.push(storeCode);
+        await pool.query(updateSql, params);
 
         results.success.push({
           row: rowNum,
           storeCode: storeCode,
           storeName: actualStoreName,
           chain: chainInput || 'N/A',
-          category: categoryInput || 'N/A',
-          action: storeExists ? 'Updated' : 'Created'
+          storeClassification: storeClassInput || 'N/A',
+          action: 'Updated'
         });
       } catch (error) {
         results.failed.push({

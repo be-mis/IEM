@@ -480,9 +480,14 @@ export default function StoreMaintenance() {
       }
     } catch (error) {
       console.error('Error uploading file:', error);
+      // If backend returned partial results (e.g. summary/results), surface them so the UI can show failed rows
+      const resp = error?.response?.data;
+      if (resp && (resp.summary || resp.results)) {
+        setUploadResults(resp);
+      }
       setSnackbar({
         open: true,
-        message: error.response?.data?.error || 'Failed to upload file',
+        message: resp?.error || 'Failed to upload file',
         severity: 'error'
       });
     } finally {
@@ -988,9 +993,15 @@ export default function StoreMaintenance() {
               <Typography variant="body2">
                 Upload an Excel or CSV file.
                 <br />
-                <strong>Required columns:</strong> Store Code, Chain
+                <strong>Required columns:</strong> Store Code (Chain is optional)
                 <br />
                 <strong>Optional columns:</strong> Store Description, LampsClass, DecorsClass, ClocksClass, StationeryClass, FramesClass
+              </Typography>
+            </Alert>
+
+            <Alert severity="info" sx={{ mb: 3 }}>
+              <Typography variant="body2">
+                Note: Any rows that fail validation will be listed below after upload and can be exported for correction.
               </Typography>
             </Alert>
 

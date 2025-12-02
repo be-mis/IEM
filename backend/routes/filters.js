@@ -8,6 +8,8 @@
 
 const express = require('express');
 const router = express.Router();
+const { getPool } = require('../config/database');
+const { getAllowedChains } = require('../utils/nbfiChains');
 
 router.use((req, res) => {
   res.status(410).json({ error: 'Deprecated route. Use /api/filters (EPC/NBFI split routers).' });
@@ -539,7 +541,7 @@ router.get('/nbfi/stores', async (req, res) => {
 
     // Determine table based on chain parameter
     const chainUpper = String(chain).trim().toUpperCase();
-    const allowedChains = ['SM', 'RDS', 'WDS'];
+    const allowedChains = await getAllowedChains(pool);
     const tableName = allowedChains.includes(chainUpper) 
       ? `nbfi_${chainUpper.toLowerCase()}_item_exclusivity_list`
       : 'nbfi_sm_item_exclusivity_list'; // fallback to SM
@@ -637,7 +639,7 @@ router.get('/nbfi/exclusivity-items', async (req, res) => {
     storeClass = String(storeClass).trim().toUpperCase();
     brand = String(brand).trim();
 
-    const allowedChains = ['SM', 'RDS', 'WDS'];
+    const allowedChains = await getAllowedChains(pool);
     const allowedStoreClasses = ['ASEH', 'BSH', 'CSM', 'DSS', 'ESES'];
 
     if (!allowedChains.includes(chain)) {
@@ -701,7 +703,7 @@ router.get('/nbfi/items-for-assignment', async (req, res) => {
     storeClass = String(storeClass).trim().toUpperCase();
     brand = String(brand).trim();
 
-    const allowedChains = ['SM', 'RDS', 'WDS'];
+    const allowedChains = await getAllowedChains(pool);
     const allowedStoreClasses = ['ASEH', 'BSH', 'CSM', 'DSS', 'ESES'];
 
     if (!allowedChains.includes(chain)) {
