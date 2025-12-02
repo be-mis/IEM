@@ -459,6 +459,18 @@ const Dashboard = () => {
     }
   };
 
+  // Map currentView + user to a proper AppBar title
+  const getTitle = () => {
+    if (currentView === 'exclusivityform-epc') return 'EPC Exclusivity Form';
+    if (currentView === 'exclusivityform-nbfi') return 'NBFI Exclusivity Form';
+    if (currentView === 'exclusivityform') return 'Exclusivity Form';
+    if (currentView === 'itemmaintenance' || currentView === 'itemmaintenance-epc' || currentView === 'itemmaintenance-nbfi') return 'Item Maintenance';
+    if (currentView === 'storemaintenance' || currentView === 'storemaintenance-epc' || currentView === 'storemaintenance-nbfi') return 'Store Maintenance';
+    if (currentView === 'usermanagement') return 'User Management';
+    if (currentView === 'auditlogs') return 'Audit Logs';
+    return 'Exclusivity Form';
+  };
+
   const drawer = (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       <Box sx={{ p: 4, textAlign: 'center' }}>
@@ -541,12 +553,7 @@ const Dashboard = () => {
                 <MenuIcon />
               </IconButton>
               <Typography variant="h6" sx={{ flexGrow: 1, fontWeight: '700' }}>
-                {currentView === 'exclusivityform' && user?.businessUnit === 'NBFI' && user?.role !== 'admin' ? 'Exclusivity Form' :
-                 currentView === 'exclusivityform' ? 'Exclusivity Form' :
-                 currentView === 'itemmaintenance' ? 'Item Maintenance' :
-                 currentView === 'storemaintenance' ? 'Store Maintenance' :
-                 currentView === 'usermanagement' ? 'User Management' :
-                 currentView === 'auditlogs' ? 'Audit Logs' : 'Exclusivity Form'}
+                {getTitle()}
               </Typography>
               
               {/* User Info and Logout */}

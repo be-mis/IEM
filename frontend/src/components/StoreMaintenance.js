@@ -183,7 +183,14 @@ export default function StoreMaintenance() {
 
     const branch = availableBranches.find(b => b.branchCode === branchCode);
     if (branch && !addedBranches.find(b => b.branchCode === branchCode)) {
-      setAddedBranches(prev => [...prev, branch]);
+      // include selected chain/category/storeClass on the added row so the UI can display them
+      const enriched = {
+        ...branch,
+        chain: addBranchForm.chain,
+        category: addBranchForm.category,
+        storeClass: addBranchForm.storeClass
+      };
+      setAddedBranches(prev => [...prev, enriched]);
       setAddBranchForm(prev => ({ ...prev, branchCode: '' }));
     }
   };
@@ -923,16 +930,22 @@ export default function StoreMaintenance() {
                   <Table size="small">
                     <TableHead>
                       <TableRow>
-                        <TableCell><strong>Store Code</strong></TableCell>
-                        <TableCell><strong>Store Name</strong></TableCell>
-                        <TableCell align="center"><strong>Action</strong></TableCell>
-                      </TableRow>
+                          <TableCell><strong>Store Code</strong></TableCell>
+                          <TableCell><strong>Store Name</strong></TableCell>
+                          <TableCell><strong>Store Classification</strong></TableCell>
+                          <TableCell align="center"><strong>Action</strong></TableCell>
+                        </TableRow>
                     </TableHead>
                     <TableBody>
-                      {paginatedAddedBranches.map((branch) => (
+                      {paginatedAddedBranches.map((branch) => {
+                        // Resolve human-readable store class label from storeClasses list
+                        const scObj = storeClasses.find(sc => sc.storeClassCode === branch.storeClass || sc.storeClassCode === branch.storeClassCode || sc.storeClassification === branch.storeClass || sc.storeClassification === branch.storeClassCode || sc.storeClassification === branch.storeClassification);
+                        const scLabel = scObj ? scObj.storeClassification : (branch.storeClass || branch.storeClassCode || branch.storeClassification || '');
+                        return (
                         <TableRow key={branch.branchCode}>
                           <TableCell>{branch.branchCode}</TableCell>
                           <TableCell>{branch.branchName}</TableCell>
+                          <TableCell>{scLabel}</TableCell>
                           <TableCell align="center">
                             <IconButton
                               color="error"
@@ -943,7 +956,8 @@ export default function StoreMaintenance() {
                             </IconButton>
                           </TableCell>
                         </TableRow>
-                      ))}
+                        );
+                      })}
                     </TableBody>
                   </Table>
                   <TablePagination

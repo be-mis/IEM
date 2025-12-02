@@ -48,6 +48,7 @@ export default function NBFIStoreMaintenance() {
   const [dialogMode, setDialogMode] = useState('single');
   const [selectedRow, setSelectedRow] = useState(null);
   const [openAddModal, setOpenAddModal] = useState(false);
+  const [openCloseConfirmDialog, setOpenCloseConfirmDialog] = useState(false);
   const [addBranchForm, setAddBranchForm] = useState({ chain: '', brand: '', storeClassification: '', branchCode: '' });
   const [availableBranches, setAvailableBranches] = useState([]);
   const [loadingBranches, setLoadingBranches] = useState(false);
@@ -181,6 +182,14 @@ export default function NBFIStoreMaintenance() {
   };
 
   const handleCloseAddModal = () => {
+    // If there is unsaved data or pending added branches, show confirmation
+    const hasFormData = addBranchForm.chain || addBranchForm.brand || addBranchForm.storeClassification || addBranchForm.branchCode;
+    const hasAddedBranches = addedBranches.length > 0;
+    if (hasFormData || hasAddedBranches) {
+      setOpenCloseConfirmDialog(true);
+      return;
+    }
+
     setOpenAddModal(false);
     setAddBranchForm({
       chain: '',
@@ -189,6 +198,18 @@ export default function NBFIStoreMaintenance() {
       branchCode: ''
     });
     setAddedBranches([]);
+  };
+
+  const handleConfirmCloseAddModal = () => {
+    setOpenCloseConfirmDialog(false);
+    setOpenAddModal(false);
+    setAddBranchForm({ chain: '', brand: '', storeClassification: '', branchCode: '' });
+    setAvailableBranches([]);
+    setAddedBranches([]);
+  };
+
+  const handleCancelCloseAddModal = () => {
+    setOpenCloseConfirmDialog(false);
   };
 
   const handleAddBranchFormChange = (field, value) => {
@@ -296,7 +317,11 @@ export default function NBFIStoreMaintenance() {
         });
       }
 
-      handleCloseAddModal();
+      // Close modal without showing the confirm-close dialog (save should not prompt)
+      setOpenAddModal(false);
+      setAddBranchForm({ chain: '', brand: '', storeClassification: '', branchCode: '' });
+      setAvailableBranches([]);
+      setAddedBranches([]);
       await fetchBranches();
       
     } catch (err) {
@@ -890,6 +915,24 @@ export default function NBFIStoreMaintenance() {
         </DialogActions>
       </Dialog>
 
+      {/* Close Add Modal Confirmation Dialog */}
+      <Dialog open={openCloseConfirmDialog} onClose={handleCancelCloseAddModal}>
+        <DialogTitle>Confirm Close</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            You have unsaved data. All inputs and added stores will be cleared. Do you want to continue?
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCancelCloseAddModal} color="inherit">
+            No
+          </Button>
+          <Button onClick={handleConfirmCloseAddModal} color="primary" variant="contained">
+            Yes
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       {/* Add Store Modal */}
       <Dialog 
         open={openAddModal} 
@@ -1048,8 +1091,15 @@ export default function NBFIStoreMaintenance() {
                         // Find brand and storeClass descriptions
                         const brandObj = brands.find(b => b.brandCode === branch.brand || b.brandCode === branch.brandCode);
                         const brandLabel = brandObj ? brandObj.brand : branch.brand || branch.brandCode;
-                        const storeClassObj = storeClasses.find(sc => sc.storeClassCode === branch.storeClass || sc.storeClassCode === branch.storeClassCode);
-                        const storeClassLabel = storeClassObj ? storeClassObj.storeClassification : branch.storeClass || branch.storeClassCode;
+                        const storeClassObj = storeClasses.find(sc =>
+                          sc.storeClassCode === branch.storeClassification ||
+                          sc.storeClassCode === branch.storeClass ||
+                          sc.storeClassCode === branch.storeClassCode ||
+                          sc.storeClassification === branch.storeClassification ||
+                          sc.storeClassification === branch.storeClass ||
+                          sc.storeClassification === branch.storeClassCode
+                        );
+                        const storeClassLabel = storeClassObj ? storeClassObj.storeClassification : (branch.storeClassification || branch.storeClass || branch.storeClassCode || '');
                         return (
                           <TableRow key={branch.branchCode + '-' + (branch.brand || '') + '-' + (branch.storeClass || '')}>
                             <TableCell>{branch.branchCode}</TableCell>
