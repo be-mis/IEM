@@ -913,7 +913,7 @@ export default function StoreMaintenance() {
                   <Button
                     variant="outlined"
                     color="secondary"
-                    onClick={() => setAddBranchForm(prev => ({ ...prev, branchCode: '' }))}
+                    onClick={() => setAddBranchForm(prev => ({ ...prev, chain: '', category: '', storeClass: '', branchCode: '' }))}
                     sx={{ minWidth: '120px' }}
                   >
                     Clear
