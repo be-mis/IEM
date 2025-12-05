@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import axios from 'axios';
 
 // Set up axios base URL - Updated for network access
-const API_BASE_URL = 'http://localhost:5000/api';
+const API_BASE_URL = process.env.REACT_APP_API_BASE || 'http://localhost:3001/api';
 const api = axios.create({
   baseURL: API_BASE_URL,
   timeout: 10000, // 10 second timeout
@@ -285,7 +285,7 @@ export const useInventoryItems = () => {
       if (isConnected) {
         await fetchItems();
       } else {
-        setError('Unable to connect to backend server. Please check if the server is running on http://localhost:5000');
+        setError('Unable to connect to backend server. Please check if the server is running.');
         setLoading(false);
       }
     };

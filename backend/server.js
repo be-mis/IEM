@@ -16,7 +16,8 @@ const PORT = process.env.PORT || 5000;
 const HOST = '0.0.0.0'; // Listen on all network interfaces
 
 // Middleware - Updated CORS to allow your network IP
-const allowed = new RegExp(/^http:\/\/(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+):3020$/);
+// const allowed = new RegExp(/^http:\/\/(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+):3020$/);
+const allowed = new RegExp(/^http:\/\/(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+)(:\d+)?$/);
 app.use(cors({
   origin: (origin, cb) => {
     if (!origin || allowed.test(origin)) return cb(null, true);
