@@ -13,7 +13,7 @@ export default function Login() {
   const navigate = useNavigate();
   const { login } = useAuth();
   const [formData, setFormData] = useState({
-    username: '',
+    email: '',
     password: ''
   });
   const [showPassword, setShowPassword] = useState(false);
@@ -32,8 +32,8 @@ export default function Login() {
     event.preventDefault();
     
     // Validation
-    if (!formData.username || !formData.password) {
-      setError('Please enter both username and password');
+    if (!formData.email || !formData.password) {
+      setError('Please enter both email and password');
       return;
     }
 
@@ -41,9 +41,9 @@ export default function Login() {
       setLoading(true);
       setError('');
 
-      console.log('Attempting login with username:', formData.username);
+      console.log('Attempting login with email:', formData.email);
 
-      const result = await login(formData.username, formData.password);
+      const result = await login(formData.email, formData.password);
 
       if (result.success) {
         console.log('Login successful');
@@ -127,10 +127,11 @@ export default function Login() {
           <Box component="form" onSubmit={handleSubmit} noValidate>
             <TextField
               fullWidth
-              label="Username or Email"
+              label="Email"
+              type="email"
               variant="outlined"
-              value={formData.username}
-              onChange={handleChange('username')}
+              value={formData.email}
+              onChange={handleChange('email')}
               disabled={loading}
               sx={{ mb: 2 }}
               InputProps={{
@@ -140,7 +141,7 @@ export default function Login() {
                   </InputAdornment>
                 ),
               }}
-              autoComplete="username"
+              autoComplete="email"
               autoFocus
             />
 

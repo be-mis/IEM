@@ -12,16 +12,16 @@ const router = express.Router();
 // POST /api/auth/login
 router.post('/login', async (req, res) => {
   try {
-    const { username, password } = req.body;
+    const { email, password } = req.body;
     
-    if (!username || !password) {
-      return res.status(400).json({ message: 'Username and password are required' });
+    if (!email || !password) {
+      return res.status(400).json({ message: 'Email and password are required' });
     }
     
     const pool = getPool();
     const [users] = await pool.execute(
-      'SELECT * FROM users WHERE username = ? AND is_active = TRUE',
-      [username]
+      'SELECT * FROM users WHERE email = ? AND is_active = TRUE',
+      [email]
     );
     
     if (users.length === 0) {
@@ -31,10 +31,10 @@ router.post('/login', async (req, res) => {
           entityType: 'auth',
           entityId: null,
           action: 'login_failed',
-          entityName: username,
+          entityName: email,
           userId: null,
-          userName: username,
-          userEmail: req.user?.email || req.email || user?.email || null,
+          userName: email,
+          userEmail: email,
           ip: getIp(req),
           details: { success: false, reason: 'user_not_found' }
         });
@@ -45,7 +45,7 @@ router.post('/login', async (req, res) => {
     }
     
     const user = users[0];
-    console.log('Login attempt for user:', username, '| Stored hash length:', user.password?.length);
+    console.log('Login attempt for email:', email, '| Stored hash length:', user.password?.length);
     const validPassword = await bcrypt.compare(password, user.password);
     console.log('Password validation result:', validPassword);
     
@@ -56,10 +56,10 @@ router.post('/login', async (req, res) => {
           entityType: 'auth',
           entityId: user.id,
           action: 'login_failed',
-          entityName: username,
+          entityName: user.username,
           userId: user.id,
-          userName: username,
-        userEmail: req.user?.email || req.email || user?.email || null,
+          userName: user.username,
+          userEmail: user.email,
           ip: getIp(req),
           details: { success: false, reason: 'invalid_password' }
         });

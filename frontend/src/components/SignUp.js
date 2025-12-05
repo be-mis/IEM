@@ -198,7 +198,7 @@ export default function SignUp() {
           <Box component="form" onSubmit={handleSubmit} noValidate>
             <TextField
               fullWidth
-              label="Username"
+              label="Name"
               variant="outlined"
               value={formData.username}
               onChange={handleChange('username')}
