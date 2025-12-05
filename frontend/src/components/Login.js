@@ -127,7 +127,7 @@ export default function Login() {
           <Box component="form" onSubmit={handleSubmit} noValidate>
             <TextField
               fullWidth
-              label="Email"
+              label="Email Address"
               type="email"
               variant="outlined"
               value={formData.email}
