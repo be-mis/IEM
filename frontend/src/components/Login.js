@@ -97,7 +97,7 @@ export default function Login() {
                 width: 80,
                 height: 80,
                 borderRadius: '50%',
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                // background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -106,13 +106,18 @@ export default function Login() {
                 boxShadow: '0 4px 20px rgba(102, 126, 234, 0.4)'
               }}
             >
-              <LockOutlined sx={{ fontSize: 40, color: 'white' }} />
+              {/* <LockOutlined sx={{ fontSize: 40, color: 'white' }} /> */}
+              <img
+                src="/BElogo.png"
+                alt="Logo"
+                style={{ width: 100, height: 100, borderRadius: '50%' }}
+              />
             </Box>
             <Typography variant="h4" component="h1" fontWeight="bold" gutterBottom>
-              Welcome Back
+              Welcome
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Sign in to continue to IEM System
+              Sign in to your account
             </Typography>
           </Box>
 
