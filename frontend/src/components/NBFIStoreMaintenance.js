@@ -6,12 +6,17 @@ import Filter from './Filter';
 import axios from 'axios';
 import * as XLSX from 'xlsx';
 
-// Fetch stores for Add Store modal (by chain only, exclusive endpoint)
-async function fetchModalStores(chain) {
+// Fetch stores for Add Store modal (by chain, brand, storeClass - excludes already assigned stores)
+async function fetchModalStores(chain, brand, storeClass) {
   if (!chain) return [];
   try {
+    const params = { chain };
+    if (brand && storeClass) {
+      params.brand = brand;
+      params.storeClass = storeClass;
+    }
     const response = await axios.get(`${API_BASE_URL}/filters/nbfi/modal-stores`, {
-      params: { chain }
+      params
     });
     return response.data.items || [];
   } catch (err) {
@@ -121,15 +126,15 @@ export default function NBFIStoreMaintenance() {
 
   // Fetch available stores for Add Store modal using the exclusive endpoint
   const fetchAvailableBranches = async () => {
-    const { chain } = addBranchForm;
+    const { chain, brand, storeClassification } = addBranchForm;
     if (!chain) {
       setAvailableBranches([]);
       return;
     }
     try {
       setLoadingBranches(true);
-      const items = await fetchModalStores(chain);
-      console.log('[Add Store Modal] Fetched stores for chain', chain, items);
+      const items = await fetchModalStores(chain, brand, storeClassification);
+      console.log('[Add Store Modal] Fetched stores for chain/brand/class', { chain, brand, storeClassification }, items);
       setAvailableBranches(items);
     } catch (err) {
       setAvailableBranches([]);
@@ -149,19 +154,20 @@ export default function NBFIStoreMaintenance() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [addBranchForm.chain, addBranchForm.brand, addBranchForm.storeClassification]);
 
-  // Filter available stores to exclude already added and match storeClass if selected
-  // Filter available stores to exclude already added (no storeClass filtering)
+  // Filter available stores to exclude:
+  // 1. Stores already in the "Added Stores" table
+  // 2. Stores already assigned to the selected brand+storeClassification (filtered by backend, but double-check)
   const filteredAvailableBranches = useMemo(() => {
-    // Exclude only if branch is already added for the same chain, brand, and storeClassification
     return availableBranches.filter(b => {
-      return !addedBranches.some(added =>
-        added.branchCode === b.branchCode &&
-        added.chain === addBranchForm.chain &&
-        added.brand === addBranchForm.brand &&
-        added.storeClassification === addBranchForm.storeClassification
-      );
+      // Exclude if already in the Added Stores table
+      const isInAddedTable = addedBranches.some(added => added.branchCode === b.branchCode);
+      
+      // Exclude if already exists in current main table (rowsState)
+      const isInMainTable = rowsState.some(row => row.branchCode === b.branchCode);
+      
+      return !isInAddedTable && !isInMainTable;
     });
-  }, [availableBranches, addedBranches]);
+  }, [availableBranches, addedBranches, rowsState]);
 
   const paginatedAddedBranches = useMemo(() => {
     const start = addedBranchesPage * addedBranchesRowsPerPage;

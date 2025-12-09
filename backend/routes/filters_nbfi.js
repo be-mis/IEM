@@ -25,12 +25,48 @@ router.use((req, res, next) => {
 // GET /api/filters/nbfi/modal-stores (exclusive for Add Store modal)
 router.get('/nbfi/modal-stores', async (req, res) => {
   try {
-    const { chain } = req.query;
+    const { chain, brand, storeClass } = req.query;
     if (!chain) {
       return res.status(400).json({ error: 'Missing required parameter: chain' });
     }
 
     const pool = getPool();
+    
+    // If brand and storeClass are provided, filter out stores already assigned to this brand+storeClass
+    if (brand && storeClass) {
+      const sanitize = (s) => String(s || '').trim().replace(/\s+/g, '_').replace(/[^A-Za-z0-9_]/g, '').toLowerCase();
+      const brandCol = `brand_${sanitize(brand)}`;
+
+      // Check if the brand column exists
+      const [colInfo] = await pool.execute(
+        `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'nbfi_stores' AND COLUMN_NAME = ?`,
+        [brandCol]
+      );
+      
+      if (Array.isArray(colInfo) && colInfo.length > 0) {
+        // Brand column exists - exclude stores already assigned to this brand+storeClass
+        const query = `
+          SELECT storeCode, storeName, chainCode, \`${brandCol}\` AS currentStoreClass
+          FROM nbfi_stores
+          WHERE chainCode = ?
+            AND (
+              \`${brandCol}\` IS NULL 
+              OR \`${brandCol}\` = '' 
+              OR LOWER(\`${brandCol}\`) != LOWER(?)
+            )
+          ORDER BY storeCode ASC
+        `;
+        const [rows] = await pool.execute(query, [chain, storeClass]);
+        return res.json({ items: rows.map(r => ({
+          branchCode: r.storeCode,
+          branchName: r.storeName,
+          chainCode: r.chainCode,
+          currentStoreClass: r.currentStoreClass
+        })) });
+      }
+    }
+    
+    // Fallback: no brand/storeClass filtering, return all stores for the chain
     const query = `
       SELECT storeCode, storeName, chainCode
       FROM nbfi_stores
@@ -41,8 +77,7 @@ router.get('/nbfi/modal-stores', async (req, res) => {
     return res.json({ items: rows.map(r => ({
       branchCode: r.storeCode,
       branchName: r.storeName,
-      chainCode: r.chainCode,
-      storeClassCode: r.storeClassCode
+      chainCode: r.chainCode
     })) });
   } catch (err) {
     console.error('GET /filters/nbfi/modal-stores error:', err);
