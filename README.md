@@ -2,77 +2,6 @@
 
 A comprehensive web-based system for managing item and branch exclusivity across multiple store chains and classifications.
 
-## 🚀 Quick Start (Production Deployment)
-
-### For Production Deployment:
-**Simply double-click: `start-production.bat`**
-
-Then access the application at: **http://192.168.0.138:3000**
-
-Default login:
-- Username: `admin`
-- Password: `admin123`
-
-**⚠️ Change the default password immediately after first login!**
-
-### For Detailed Instructions:
-- See **PRODUCTION_README.md** for quick start guide
-- See **DEPLOYMENT_GUIDE.md** for complete deployment instructions
-- See **DEPLOYMENT_CHECKLIST.md** for deployment checklist
-
----
-
-## 🌟 System Overview
-
-The IEM system manages the exclusivity of items and branches across different store chains (Various, SM, Orocan) and classifications (ASEH, BSH, CSM, DSS, ESES) for various product categories (Lamps, Decors, Clocks, Stationery, Frames).
-
-## 📋 Features
-
-### Core Modules
-1. **Exclusivity Form** - Main interface for viewing and managing exclusivity assignments
-2. **Item Maintenance** - Add, edit, and remove item exclusivity assignments
-3. **Store Maintenance** - Manage branch assignments by store classification
-4. **User Management** - Manage user accounts and roles (Admin only)
-5. **Reports** - Generate exclusivity reports
-6. **Audit Logs** - Track all system changes and user actions (Admin only)
-
-### Authentication & Security
-- ✅ JWT-based authentication
-- ✅ Role-based access control (Admin, Manager, Employee)
-- ✅ Password reset via email
-- ✅ Secure session management
-- ✅ Comprehensive audit logging
-
-### Key Capabilities
-- ✅ Dynamic filtering by chain, category, and store classification
-- ✅ Bulk operations for items and branches
-- ✅ Real-time data validation
-- ✅ Email notifications (password reset)
-- ✅ Excel export functionality
-- ✅ Responsive Material-UI design
-- ✅ Network-accessible deployment
-
-## 🛠️ Tech Stack
-
-### Frontend
-- **React 18** - UI framework
-- **Material-UI 5** - Component library
-- **Axios** - HTTP client
-- **React Router** - Navigation
-
-### Backend
-- **Node.js v24.11.0** - Runtime environment
-- **Express.js** - Web framework
-- **MySQL** - Database
-- **mysql2** - Database driver
-- **JWT** - Authentication
-- **bcryptjs** - Password hashing
-- **nodemailer** - Email service
-
-### Email Service
-- **Brevo SMTP** - 
-- **From:** 
-
 ## 📁 Project Structure
 
 ```
@@ -85,7 +14,63 @@ IEM/
 ├── DEPLOYMENT_CHECKLIST.md       # Deployment checklist
 ├── frontend/
 │   ├── .env                      # Frontend config (API URL)
-│   ├── src/
+│   ├── package.json
+│   ├── public/
+│   └── src/
+│       ├── components/           # UI components
+│       │   ├── AddItem.js
+│       │   ├── AuditLogs.js
+│       │   ├── CheckInItem.js
+│       │   ├── CheckOutItem.js
+│       │   ├── ExclusivityForm.js
+│       │   ├── Filter.js
+│       │   ├── ForgotPassword.js
+│       │   ├── ItemDetailsModal.js
+│       │   ├── ItemMaintenance.js
+│       │   ├── ListOfBranch.js
+│       │   ├── ListOfExclusion.js
+│       │   ├── ListOfExclusionContainer.js
+│       │   ├── ListOfItems.js
+│       │   ├── Login.js
+│       │   ├── NBFIExclusivityForm.js
+│       │   ├── NBFIFilter.js
+│       │   ├── NBFIItemMaintenance.js
+│       │   ├── NBFIListOfBranch.js
+│       │   ├── NBFIListOfExclusion.js
+│       │   ├── NBFIListOfExclusionContainer.js
+│       │   ├── NBFIListOfItems.js
+│       │   ├── NBFIStoreMaintenance.js
+│       │   ├── ProtectedRoute.js
+│       │   ├── Reports.js
+│       │   ├── ResetPassword.js
+│       │   ├── Resources.js
+│       │   ├── Reports.js
+│       │   ├── SmartRedirect.js
+│       │   ├── SignUp.js
+│       │   ├── StoreMaintenance.js
+│       │   ├── StoreMaintenance_backup_20251111_155000.js
+│       │   ├── UserMaintenance.js
+│       │   └── ViewItems.js
+│       ├── context/              # AuthContext and other contexts
+│       └── utils/                # Utilities (excelExport, helpers)
+│       └── index.js
+│       └── App.js
+│   └── build/                    # Production build (created by npm run build)
+├── backend/
+│   ├── .env                      # Backend config (DB, Email, JWT)
+│   ├── package.json
+│   ├── server.js                 # Main server file
+│   ├── config/
+│   │   └── database.js           # Database connection
+│   ├── routes/                   # Express route handlers
+│   ├── middleware/               # JWT verification, other middleware
+│   ├── utils/                    # auditLogger, emailService, logger
+│   └── migrations/               # Database migrations
+└── docs/                         # Documentation files
+    ├── EMAIL_CONFIGURATION_GUIDE.md
+    ├── AUDIT_LOGS_IMPLEMENTATION.md
+    └── UI_CONSISTENCY_GUIDELINES.md
+```
 │   │   ├── components/
 │   │   │   ├── Login.js          # Login page
 │   │   │   ├── SignUp.js         # Registration page
@@ -130,36 +115,11 @@ IEM/
     ├── AUDIT_LOGS_IMPLEMENTATION.md  # Audit system docs
     └── UI_CONSISTENCY_GUIDELINES.md  # UI guidelines
 ```
-│   │   │   ├── Filter.js              # Reusable filter component
-│   │   │   ├── Reports.js             # Reporting interface
-│   │   │   ├── AuditLogs.js           # Audit trail viewer
-│   │   │   └── [other components]
-│   │   ├── App.js
-│   │   └── index.js
-│   ├── package.json
-│   └── README.md
-│
-├── backend/
-│   ├── config/
-│   │   └── database.js                # Database configuration
-│   ├── routes/
-│   │   ├── inventory.js               # Item/branch operations
-│   │   ├── filters.js                 # Filter data endpoints
-│   │   ├── dashboard.js               # Dashboard data
-│   │   ├── reports.js                 # Report generation
-│   │   └── audit.js                   # Audit log endpoints
-│   ├── utils/
-│   │   ├── auditLogger.js             # Audit logging utility
-│   │   └── logger.js                  # General logging
-│   ├── migrations/                    # Database migrations
-│   ├── server.js                      # Express server
-│   └── package.json
-│
-└── docs/                              # Documentation files
-    ├── UI_CONSISTENCY_GUIDELINES.md
-    ├── AUDIT_LOGS_IMPLEMENTATION.md
-    └── [other documentation]
-```
+### Notes
+- The frontend `src/components/` folder contains many feature components (Login, SignUp, NBFI/EPC maintenance views, filters, etc.).
+- The backend `routes/` folder contains route files for `auth`, `inventory`, `filters`, `dashboard`, `reports`, and `audit`.
+
+If you'd like, I can expand the `components/` list with exact filenames present in `frontend/src/components/` (e.g., `NBFIStoreMaintenance.js`, `StoreMaintenance.js`, `ExclusivityForm.js`) — say the word and I'll enumerate them.
 
 ## 🔧 Setup Instructions
 
@@ -201,7 +161,7 @@ node migrations/migrate.js
 npm start
 ```
 
-Backend will run on `http://localhost:5000`
+Backend will run on `http://localhost:3001` (or `http://<SERVER_IP>:3001` when accessed over the network)
 
 ### Frontend Setup
 
@@ -217,16 +177,18 @@ npm install
 
 3. Configure API URL:
    - Update `REACT_APP_API_BASE` in `.env` file:
-   ```env
-   REACT_APP_API_BASE=http://localhost:5000/api
-   ```
+    ```env
+    REACT_APP_API_BASE=http://localhost:3001/api
+    # or for network testing:
+    # REACT_APP_API_BASE=http://192.168.0.157:3001/api
+    ```
 
 4. Start frontend development server:
 ```bash
 npm start
 ```
 
-Frontend will run on `http://localhost:3000`
+Frontend (dev) will run on `http://localhost:3020` and production build is served on `http://<SERVER_IP>:3020` by the deployment scripts
 
 ## 🗄️ Database Schema
 
@@ -381,7 +343,7 @@ Internal Use Only - Company Proprietary
 ## 👥 Contributors
 
 - Development Team
-- Last Updated: November 4, 2025
+- Last Updated: December 9, 2025
 
 ---
 
