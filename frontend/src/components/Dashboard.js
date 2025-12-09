@@ -480,11 +480,16 @@ const Dashboard = () => {
           justifyContent: 'center',
           width: 48,
           height: 48,
-          borderRadius: '8px',
-          background: '#2563eb',
+          borderRadius: '50%',
+          // background: '#2563eb',
           mb: 2,
         }}>
-          <AutoAwesome sx={{ fontSize: 24, color: 'white' }} />
+          {/* <AutoAwesome sx={{ fontSize: 24, color: 'white' }} /> */}
+          <img
+            src="/BElogo.png"
+            alt="Logo"
+            style={{ width: 50, height: 50, borderRadius: '8px' }}
+          />
         </Box>
         <Typography variant="h6" sx={{ fontWeight: '700', color: '#1f2937', mb: 1 }}>
           IEM
