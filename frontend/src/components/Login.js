@@ -247,14 +247,14 @@ export default function Login() {
         </Paper>
 
         {/* Footer */}
-        <Typography
+        {/* <Typography
           variant="body2"
           color="white"
           align="center"
           sx={{ mt: 4, opacity: 0.9 }}
         >
           © 2025 Item Exclusivity Module. All rights reserved.
-        </Typography>
+        </Typography> */}
       </Container>
     </Box>
   );

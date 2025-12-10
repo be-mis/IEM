@@ -9,12 +9,14 @@ import useItems from '../hooks/useItems';
 
 const columns = [
   { id: 'itemCode', label: 'Item Code', width: 200 },
-  { id: 'description', label: 'Description', width: 600 },
+  { id: 'description', label: 'Description', width: 400 },
+  { id: 'size', label: 'Size', width: 100 },
+  { id: 'color', label: 'Color', width: 120 },
   { id: 'quantity', label: 'Quantity', width: 200 },
 ];
 
-function createData(itemCode, description, quantity) {
-  return { itemCode, description, quantity };
+function createData(itemCode, description, size, color, quantity) {
+  return { itemCode, description, size, color, quantity };
 }
 const rowKey = (r) => `${r.itemCode}|${r.description}`;
 
@@ -34,7 +36,9 @@ export default function StickyHeadTable({ filters, quantities = {}, setQuantitie
     return items.map((it) => {
       const itemCode = it.itemCode || '';
       const description = it.itemDescription ?? it.description ?? '';
-      return createData(itemCode, description, 0);
+      const size = it.itemSize || '';
+      const color = it.itemColor || '';
+      return createData(itemCode, description, size, color, 0);
     });
   }, [items]);
 

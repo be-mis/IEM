@@ -220,7 +220,7 @@ function BranchRow({ branch, items, onUpdateBranch }) {
               renderInput={(params) => (
                 <TextField
                   {...params}
-                  label="Select item (search by code/name)"
+                  label="Select item (search by item code/name)"
                   placeholder="e.g., ITM-001 or Black T-Shirt"
                   autoComplete="off"
                   aria-label={`Select item to exclude for ${branch.code}`}
@@ -254,13 +254,15 @@ function BranchRow({ branch, items, onUpdateBranch }) {
                   <TableRow>
                     <TableCell sx={{ width: 180 }}>Item Code</TableCell>
                     <TableCell>Item Name</TableCell>
+                    <TableCell sx={{ width: 100 }}>Size</TableCell>
+                    <TableCell sx={{ width: 120 }}>Color</TableCell>
                     <TableCell sx={{ width: 160 }}>Action</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
                   {excludedItems.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={3}>
+                      <TableCell colSpan={5}>
                         <Typography variant="body2" color="text.secondary">
                           No excluded items yet.
                         </Typography>
@@ -273,6 +275,8 @@ function BranchRow({ branch, items, onUpdateBranch }) {
                           {it.code}
                         </TableCell>
                         <TableCell>{it.name}</TableCell>
+                        <TableCell>{it.size || ''}</TableCell>
+                        <TableCell>{it.color || ''}</TableCell>
                         <TableCell>
                           <Tooltip title="Remove item">
                             <IconButton 

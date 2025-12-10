@@ -18,14 +18,16 @@ const API_BASE_URL = process.env.REACT_APP_API_BASE || 'http://localhost:5000/ap
 
 const columns = [
   { id: 'select', label: '', width: 50 },
-  { id: 'itemCode', label: 'Item Code', width: 200 },
-  { id: 'description', label: 'Description', width: 600 },
+  { id: 'itemCode', label: 'Item Code', width: 180 },
+  { id: 'description', label: 'Description', width: 400 },
+  { id: 'size', label: 'Size', width: 100 },
+  { id: 'color', label: 'Color', width: 120 },
   // { id: 'quantity', label: 'Quantity', width: 200 },
   { id: 'action', label: 'Action', width: 120 }
 ];
 
-function createData(itemCode, description, quantity) {
-  return { itemCode, description, quantity };
+function createData(itemCode, description, quantity, size = '', color = '') {
+  return { itemCode, description, quantity, size, color };
 }
 
 const rowKey = (r) => `${r.itemCode}|${r.description}`;
@@ -116,7 +118,9 @@ export default function ItemMaintenance() {
         createData(
           item.itemCode,
           item.itemDescription,
-          item.quantity || 0
+          item.quantity || 0,
+          item.itemSize || '',
+          item.itemColor || ''
         )
       );
 
@@ -1031,6 +1035,8 @@ export default function ItemMaintenance() {
                     </TableCell>
                     <TableCell>{row.itemCode}</TableCell>
                     <TableCell>{row.description}</TableCell>
+                    <TableCell>{row.size}</TableCell>
+                    <TableCell>{row.color}</TableCell>
                     {/* <TableCell>
                       <TextField
                         value={quantities[key] ?? 0}

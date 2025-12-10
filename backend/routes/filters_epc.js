@@ -138,7 +138,7 @@ router.get('/items', async (req, res) => {
 
     const pool = getPool();
     const query = `
-      SELECT DISTINCT i.itemCode, i.itemDescription, i.itemCategory
+      SELECT DISTINCT i.itemCode, i.itemDescription, i.itemCategory, i.size, i.color
       FROM epc_item_list i
       INNER JOIN epc_item_exclusivity_list e ON e.itemCode = i.itemCode
       WHERE LOWER(i.itemCategory) = ? AND e.${columnName} = 1
@@ -161,6 +161,8 @@ router.get('/items', async (req, res) => {
         itemCode: r.itemCode,
         itemDescription: r.itemDescription,
         itemCategory: r.itemCategory,
+        itemSize: r.size || '',
+        itemColor: r.color || '',
         quantity: 0
       }))
     });

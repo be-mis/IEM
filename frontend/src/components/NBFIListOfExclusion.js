@@ -220,7 +220,7 @@ function BranchRow({ branch, items, onUpdateBranch }) {
               renderInput={(params) => (
                 <TextField
                   {...params}
-                  label="Select item (search by code/name)"
+                  label="Select item (search by item code/name)"
                   placeholder="e.g., ITM-001 or Black T-Shirt"
                   autoComplete="off"
                   aria-label={`Select item to exclude for ${branch.code}`}

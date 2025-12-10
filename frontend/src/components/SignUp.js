@@ -172,7 +172,7 @@ export default function SignUp() {
               Create Account
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Join the IEM System today
+              Create your account now!
             </Typography>
           </Box>
 
@@ -326,7 +326,7 @@ export default function SignUp() {
                 disabled={loading || success}
               >
                 <MenuItem value="employee">Employee</MenuItem>
-                <MenuItem value="manager">Manager</MenuItem>
+                {/* <MenuItem value="manager">Manager</MenuItem> */}
               </Select>
             </FormControl>
 
@@ -379,14 +379,14 @@ export default function SignUp() {
         </Paper>
 
         {/* Footer */}
-        <Typography
+        {/* <Typography
           variant="body2"
           color="white"
           align="center"
           sx={{ mt: 4, opacity: 0.9 }}
         >
           © 2025 IEM System. All rights reserved.
-        </Typography>
+        </Typography> */}
       </Container>
     </Box>
   );

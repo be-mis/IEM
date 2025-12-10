@@ -46,6 +46,8 @@ export default function ListOfExclusionContainer({ filters, quantities, onBranch
           id: itemCode,
           code: itemCode,
           name: itemDescription,
+          size: i.itemSize || '',
+          color: i.itemColor || '',
           key: key,
           quantity: qty
         };
