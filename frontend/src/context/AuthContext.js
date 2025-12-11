@@ -84,9 +84,13 @@ export const AuthProvider = ({ children }) => {
       if (parsedUser.business_unit && !parsedUser.businessUnit) {
         parsedUser.businessUnit = parsedUser.business_unit;
         delete parsedUser.business_unit;
-        // Update localStorage with normalized data
-        localStorage.setItem('user', JSON.stringify(parsedUser));
       }
+
+      // Ensure `name` exists for UI (prefer name, then username, then email)
+      parsedUser.name = parsedUser.name || parsedUser.username || parsedUser.email;
+
+      // Update localStorage with normalized data
+      localStorage.setItem('user', JSON.stringify(parsedUser));
       
       setUser(parsedUser);
       
@@ -109,6 +113,9 @@ export const AuthProvider = ({ children }) => {
       console.log('User data received:', response.data.user);
 
       const { token: newToken, user: userData } = response.data;
+
+      // Normalize userData to always include `name`
+      userData.name = userData.name || userData.username || userData.email;
 
       // Store in localStorage
       localStorage.setItem('token', newToken);

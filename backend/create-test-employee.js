@@ -13,13 +13,13 @@ async function createTestEmployee() {
     const password = await bcrypt.hash('employee123', 10);
     
     await pool.execute(`
-      INSERT INTO users (username, email, password, role, is_active)
+      INSERT INTO users (name, email, password, role, is_active)
       VALUES (?, ?, ?, ?, TRUE)
       ON DUPLICATE KEY UPDATE id=id
     `, ['employee', 'employee@iem.com', password, 'employee']);
     
     console.log('✅ Created test employee user:');
-    console.log('   Username: employee');
+    console.log('   Name: employee');
     console.log('   Email: employee@iem.com');
     console.log('   Password: employee123');
     console.log('   Role: employee');

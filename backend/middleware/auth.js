@@ -11,7 +11,9 @@ const verifyToken = (req, res, next) => {
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     req.userId = decoded.userId;
-    req.username = decoded.username;
+    // Prefer `name` (DB column); keep `username` for compatibility
+    req.name = decoded.name || decoded.username;
+    req.username = decoded.username || decoded.name;
     req.email = decoded.email;
     req.role = decoded.role;
     req.businessUnit = decoded.businessUnit;
@@ -19,7 +21,8 @@ const verifyToken = (req, res, next) => {
     req.user = {
       id: decoded.userId,
       userId: decoded.userId,
-      username: decoded.username,
+      name: decoded.name || decoded.username,
+      username: decoded.username || decoded.name,
       email: decoded.email,
       role: decoded.role,
       businessUnit: decoded.businessUnit

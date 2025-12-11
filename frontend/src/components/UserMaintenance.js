@@ -82,7 +82,7 @@ export default function UserMaintenance() {
     if (!searchLower) return users;
 
     return users.filter(user =>
-      user.username?.toLowerCase().includes(searchLower) ||
+      (user.name || user.username)?.toLowerCase().includes(searchLower) ||
       user.email?.toLowerCase().includes(searchLower) ||
       user.role?.toLowerCase().includes(searchLower)
     );
@@ -122,7 +122,7 @@ export default function UserMaintenance() {
   const handleOpenEditDialog = (user) => {
     setDialogMode('edit');
     setFormData({
-      username: user.username,
+      username: user.name || user.username,
       email: user.email,
       password: '', // Don't populate password for edit
       role: user.role,
@@ -318,7 +318,7 @@ export default function UserMaintenance() {
               fullWidth
               size="small"
               label="Search users"
-              placeholder="Search by username, email, or role..."
+              placeholder="Search by name, email, or role..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               InputProps={{
@@ -362,7 +362,7 @@ export default function UserMaintenance() {
             <Table stickyHeader>
               <TableHead>
                 <TableRow>
-                  <TableCell><strong>Username</strong></TableCell>
+                  <TableCell><strong>Name</strong></TableCell>
                   <TableCell><strong>Email</strong></TableCell>
                   <TableCell><strong>Role</strong></TableCell>
                   <TableCell><strong>Business Unit</strong></TableCell>
@@ -381,7 +381,7 @@ export default function UserMaintenance() {
                 ) : (
                   paginatedUsers.map((user) => (
                     <TableRow key={user.id} hover>
-                      <TableCell>{user.username}</TableCell>
+                          <TableCell>{user.name || user.username}</TableCell>
                       <TableCell>{user.email}</TableCell>
                       <TableCell>
                         <Chip
@@ -486,7 +486,7 @@ export default function UserMaintenance() {
               <Grid item xs={12}>
                 <TextField
                   fullWidth
-                  label="Username"
+                  label="Full Name"
                   value={formData.username}
                   onChange={handleFormChange('username')}
                   disabled={dialogMode === 'edit'}
@@ -591,7 +591,7 @@ export default function UserMaintenance() {
         <DialogTitle>Confirm Delete</DialogTitle>
         <DialogContent>
           <Typography>
-            Are you sure you want to delete user <strong>{deleteConfirmDialog?.username}</strong>?
+            Are you sure you want to delete user <strong>{deleteConfirmDialog?.name || deleteConfirmDialog?.username}</strong>?
             This action cannot be undone.
           </Typography>
         </DialogContent>

@@ -123,6 +123,7 @@ const Dashboard = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout } = useAuth();
+  const displayName = user?.name || user?.username || user?.email || 'User';
   
   // TEMPORARY DEBUG - Remove after testing
   // useEffect(() => {
@@ -565,7 +566,7 @@ const Dashboard = () => {
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                 <Box sx={{ display: { xs: 'none', sm: 'block' } }}>
                   <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                    {user?.username || 'User'}
+                    {displayName}
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
                     {user?.role || 'Employee'}

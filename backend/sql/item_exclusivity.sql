@@ -954,7 +954,7 @@ CREATE TABLE `nbfi_wds_item_exclusivity_list` (
 
 CREATE TABLE `users` (
   `id` int(11) NOT NULL,
-  `username` varchar(50) NOT NULL,
+  `name` varchar(50) NOT NULL,
   `email` varchar(255) NOT NULL,
   `password` varchar(255) NOT NULL,
   `role` enum('employee','admin','manager') DEFAULT 'employee',
@@ -970,7 +970,7 @@ CREATE TABLE `users` (
 -- Dumping data for table `users`
 --
 
-INSERT INTO `users` (`id`, `username`, `email`, `password`, `role`, `business_unit`, `is_active`, `created_at`, `updated_at`, `reset_token`, `reset_token_expires`) VALUES
+INSERT INTO `users` (`id`, `name`, `email`, `password`, `role`, `business_unit`, `is_active`, `created_at`, `updated_at`, `reset_token`, `reset_token_expires`) VALUES
 (1, 'admin2', 'admin@iem.com', '$2a$10$b1uJ4ayVMqA1nlzhtL9CA.q3UTLxkJSLhEMnAXz9d.G9MAu2Cf7Yu', 'admin', 'NBFI', 0, '2025-11-11 02:10:36', '2025-11-11 10:47:08', NULL, NULL),
 (2, 'nbfiroland', 'roland.alavera@barbizonfashion.com', '$2a$10$HmHmVNAYU5b7RyWtQxrmfO8J547tl5sHQ5M.uv4OZdBIfmwY1Bs9.', 'employee', 'NBFI', 1, '2025-11-11 02:33:02', '2025-11-11 10:48:32', 'f14d3a6aaf8658ece78f1f9f7c16cfc7d581096a4c3b70ba9e39cc6117709f90', '2025-11-11 13:00:55'),
 (3, 'employee', 'employee@iem.com', '$2a$10$YegxRHBE0b1Z0If4HlQwTO5vKDGt23/sl8ntvZd36PYdAYibqBosG', 'employee', 'NBFI', 0, '2025-11-11 03:07:49', '2025-11-11 10:47:17', NULL, NULL),
@@ -1238,9 +1238,9 @@ ALTER TABLE `nbfi_wds_item_exclusivity_list`
 --
 ALTER TABLE `users`
   ADD PRIMARY KEY (`id`),
-  ADD UNIQUE KEY `username` (`username`),
+  ADD UNIQUE KEY `name` (`name`),
   ADD UNIQUE KEY `email` (`email`),
-  ADD KEY `idx_username` (`username`),
+  ADD KEY `idx_name` (`name`),
   ADD KEY `idx_email` (`email`),
   ADD KEY `idx_is_active` (`is_active`),
   ADD KEY `idx_reset_token` (`reset_token`);

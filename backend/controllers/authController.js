@@ -4,9 +4,9 @@ const { getPool } = require('../config/database');
 const { logAudit, getIp } = require('../utils/auditLogger');
 
 // Generate JWT token
-const generateToken = (userId, username, role, businessUnit) => {
+const generateToken = (userId, name, email, role, businessUnit) => {
   return jwt.sign(
-    { userId, username, role, businessUnit },
+    { userId, name, email, role, businessUnit },
     process.env.JWT_SECRET,
     { expiresIn: '24h' }
   );
@@ -19,13 +19,13 @@ const login = async (req, res) => {
 
     // Validate input
     if (!username || !password) {
-      return res.status(400).json({ message: 'Username and password are required' });
+      return res.status(400).json({ message: 'Name or email and password are required' });
     }
 
-    // Find user in database
+    // Find user in database (DB column renamed to `name`)
     const pool = getPool();
     const [users] = await pool.execute(
-      'SELECT * FROM users WHERE username = ? OR email = ?',
+      'SELECT * FROM users WHERE name = ? OR email = ?',
       [username, username]
     );
 
@@ -47,17 +47,17 @@ const login = async (req, res) => {
       return res.status(401).json({ message: 'Invalid credentials' });
     }
 
-    // Generate token
-    const token = generateToken(user.id, user.username, user.role, user.business_unit);
+    // Generate token (include `name` in payload)
+    const token = generateToken(user.id, user.name || user.username, user.email, user.role, user.business_unit);
 
     // Fire-and-forget audit log (do not await to keep login snappy)
     logAudit({
       entityType: 'auth',
       entityId: String(user.id),
-      entityName: user.username,
+      entityName: user.name || user.username,
       action: 'login',
       userId: user.id,
-      userName: user.username,
+      userName: user.name || user.username,
       ip: getIp(req),
       details: { method: 'password', userAgent: req.headers['user-agent'] || null }
     });
@@ -68,7 +68,9 @@ const login = async (req, res) => {
       token,
       user: {
         id: user.id,
-        username: user.username,
+        // Normalize `name` for clients
+        name: user.name || user.username,
+        username: user.username || user.name,
         email: user.email,
         role: user.role,
         businessUnit: user.business_unit
@@ -76,7 +78,7 @@ const login = async (req, res) => {
     };
     
     console.log('=== LOGIN RESPONSE DEBUG ===');
-    console.log('User from DB:', { id: user.id, username: user.username, role: user.role, business_unit: user.business_unit });
+    console.log('User from DB:', { id: user.id, name: user.name, role: user.role, business_unit: user.business_unit });
     console.log('Response user object:', response.user);
     
     res.json(response);
@@ -105,7 +107,7 @@ const register = async (req, res) => {
     // Check if user already exists
     const pool = getPool();
     const [existingUsers] = await pool.execute(
-      'SELECT id FROM users WHERE username = ? OR email = ?',
+      'SELECT id FROM users WHERE name = ? OR email = ?',
       [username, email]
     );
 
@@ -118,7 +120,7 @@ const register = async (req, res) => {
 
     // Insert new user
     const [result] = await pool.execute(
-      'INSERT INTO users (username, email, password, role, business_unit) VALUES (?, ?, ?, ?, ?)',
+      'INSERT INTO users (name, email, password, role, business_unit) VALUES (?, ?, ?, ?, ?)',
       [username, email, hashedPassword, role || 'employee', businessUnit]
     );
 
@@ -129,7 +131,7 @@ const register = async (req, res) => {
       entityName: username,
       action: 'create',
       userId: req.userId || null,
-      userName: req.username || null,
+      userName: req.name || req.username || null,
       ip: getIp(req),
       details: { email, role: role || 'employee', businessUnit }
     });
@@ -150,7 +152,7 @@ const getProfile = async (req, res) => {
   try {
     const pool = getPool();
     const [users] = await pool.execute(
-      'SELECT id, username, email, role, business_unit, created_at FROM users WHERE id = ?',
+      'SELECT id, name, email, role, business_unit, created_at FROM users WHERE id = ?',
       [req.userId]
     );
 
@@ -164,7 +166,8 @@ const getProfile = async (req, res) => {
     res.json({ 
       user: {
         id: user.id,
-        username: user.username,
+        name: user.name || user.username,
+        username: user.username || user.name,
         email: user.email,
         role: user.role,
         businessUnit: user.business_unit,
@@ -185,7 +188,8 @@ const verifyToken = async (req, res) => {
       message: 'Token is valid',
       user: {
         userId: req.userId,
-        username: req.username,
+        name: req.name || req.username,
+        username: req.username || req.name,
         role: req.role
       }
     });

@@ -16,7 +16,7 @@ const API_BASE_URL = process.env.REACT_APP_API_BASE || 'http://localhost:5000/ap
 export default function SignUp() {
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
-    username: '',
+    name: '',
     email: '',
     password: '',
     confirmPassword: '',
@@ -56,14 +56,14 @@ export default function SignUp() {
     .join(' ');
 
   const validateForm = () => {
-    if (!formData.username || !formData.email || !formData.password || !formData.confirmPassword || !formData.businessUnit) {
+    if (!formData.name || !formData.email || !formData.password || !formData.confirmPassword || !formData.businessUnit) {
       setError('All fields are required');
       return false;
     }
 
-    // Username validation
-    if (formData.username.length < 3) {
-      setError('Username must be at least 3 characters long');
+    // Name validation
+    if (formData.name.length < 3) {
+      setError('Name must be at least 3 characters long');
       return false;
     }
 
@@ -96,9 +96,9 @@ export default function SignUp() {
       return;
     }
 
-    const capitalizedName = titleCase(formData.username);
+    const capitalizedName = titleCase(formData.name);
     // Update UI with capitalized name
-    setFormData(prev => ({ ...prev, username: capitalizedName }));
+    setFormData(prev => ({ ...prev, name: capitalizedName }));
     try {
       setLoading(true);
       setError('');
@@ -208,9 +208,9 @@ export default function SignUp() {
               fullWidth
               label="Full Name"
               variant="outlined"
-              value={formData.username}
-              onChange={handleChange('username')}
-              onBlur={() => setFormData(prev => ({ ...prev, username: titleCase(prev.username) }))}
+              value={formData.name}
+              onChange={handleChange('name')}
+              onBlur={() => setFormData(prev => ({ ...prev, name: titleCase(prev.name) }))}
               disabled={loading || success}
               sx={{ mb: 2 }}
               InputProps={{
@@ -220,7 +220,7 @@ export default function SignUp() {
                   </InputAdornment>
                 ),
               }}
-              autoComplete="username"
+              autoComplete="name"
               autoFocus
             />
 

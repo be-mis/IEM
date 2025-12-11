@@ -39,7 +39,7 @@ const createTransporter = () => {
 };
 
 // Send password reset email
-const sendPasswordResetEmail = async (email, username, resetToken) => {
+const sendPasswordResetEmail = async (email, name, resetToken) => {
   try {
     const transporter = createTransporter();
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
@@ -111,7 +111,7 @@ const sendPasswordResetEmail = async (email, username, resetToken) => {
               <h1>Password Reset Request</h1>
             </div>
             <div class="content">
-              <p>Hello <strong>${username}</strong>,</p>
+              <p>Hello <strong>${name}</strong>,</p>
               
               <p>We received a request to reset your password for your IEM System account.</p>
               
@@ -148,7 +148,7 @@ const sendPasswordResetEmail = async (email, username, resetToken) => {
         </html>
       `,
       text: `
-        Hello ${username},
+        Hello ${name},
 
         We received a request to reset your password for your IEM System account.
 

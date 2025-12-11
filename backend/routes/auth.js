@@ -56,9 +56,9 @@ router.post('/login', async (req, res) => {
           entityType: 'auth',
           entityId: user.id,
           action: 'login_failed',
-          entityName: user.username,
+          entityName: user.name || user.username,
           userId: user.id,
-          userName: user.username,
+          userName: user.name || user.username,
           userEmail: user.email,
           ip: getIp(req),
           details: { success: false, reason: 'invalid_password' }
@@ -72,7 +72,7 @@ router.post('/login', async (req, res) => {
     const token = jwt.sign(
       { 
         userId: user.id, 
-        username: user.username,
+        name: user.name || user.username,
         email: user.email,
         role: user.role,
         businessUnit: user.business_unit
@@ -87,9 +87,9 @@ router.post('/login', async (req, res) => {
         entityType: 'auth',
         entityId: user.id,
         action: 'login',
-        entityName: user.username,
+        entityName: user.name || user.username,
         userId: user.id,
-        userName: user.username,
+        userName: user.name || user.username,
         userEmail: user.email,
         ip: getIp(req),
         details: { 
@@ -107,7 +107,9 @@ router.post('/login', async (req, res) => {
       token,
       user: {
         id: user.id,
-        username: user.username,
+        // Normalize name: map DB `username` to `name` for clients
+        name: user.name || user.username,
+        username: user.username || user.name,
         email: user.email,
         role: user.role,
         businessUnit: user.business_unit
@@ -125,7 +127,7 @@ router.post('/register', async (req, res) => {
     const { username, email, password, role, businessUnit } = req.body;
     
     if (!username || !email || !password || !businessUnit) {
-      return res.status(400).json({ message: 'Username, email, password, and business unit are required' });
+      return res.status(400).json({ message: 'Name, Email Address, Business Unit, and Password are required' });
     }
     
     // Validate business unit
@@ -137,18 +139,18 @@ router.post('/register', async (req, res) => {
     
     // Check if user already exists
     const [existingUsers] = await pool.execute(
-      'SELECT id FROM users WHERE username = ? OR email = ?',
+      'SELECT id FROM users WHERE name = ? OR email = ?',
       [username, email]
     );
     
     if (existingUsers.length > 0) {
-      return res.status(409).json({ message: 'Username or email already exists' });
+      return res.status(409).json({ message: 'Name or Email Address already exists' });
     }
     
     const hashedPassword = await bcrypt.hash(password, 10);
     
     const [result] = await pool.execute(`
-      INSERT INTO users (username, email, password, role, business_unit, is_active)
+      INSERT INTO users (name, email, password, role, business_unit, is_active)
       VALUES (?, ?, ?, ?, ?, TRUE)
     `, [username, email, hashedPassword, role || 'employee', businessUnit]);
     
@@ -196,7 +198,14 @@ const authenticateToken = (req, res, next) => {
     if (err) {
       return res.status(403).json({ error: 'Invalid or expired token' });
     }
+    // Normalize token payload to include `name` and maintain `username` for compatibility
     req.user = user;
+    req.user.name = user.name || user.username;
+    req.user.username = user.username || user.name;
+    req.user.userId = user.userId || user.id;
+    req.user.email = user.email;
+    req.user.role = user.role;
+    req.user.businessUnit = user.businessUnit || user.business_unit;
     next();
   });
 };
@@ -206,15 +215,16 @@ router.get('/me', authenticateToken, async (req, res) => {
   try {
     const pool = getPool();
     const [users] = await pool.execute(
-      'SELECT id, username, email, role FROM users WHERE id = ?',
+      'SELECT id, name, email, role, business_unit as businessUnit FROM users WHERE id = ?',
       [req.user.userId]
     );
     
     if (users.length === 0) {
       return res.status(404).json({ message: 'User not found' });
     }
-    
-    res.json({ user: users[0] });
+    const u = users[0];
+    // normalize to `name` for client
+    res.json({ user: { id: u.id, name: u.name || u.username, email: u.email, role: u.role, businessUnit: u.businessUnit } });
   } catch (error) {
     console.error('Get user error:', error);
     res.status(500).json({ message: 'Failed to get user info' });
@@ -234,7 +244,7 @@ router.post('/forgot-password', async (req, res) => {
     
     // Check if user exists
     const [users] = await pool.execute(
-      'SELECT id, username, email FROM users WHERE email = ?',
+      'SELECT id, name, email FROM users WHERE email = ?',
       [email]
     );
     
@@ -261,9 +271,9 @@ router.post('/forgot-password', async (req, res) => {
         entityType: 'user',
         entityId: user.id,
         action: 'forgot_password',
-        entityName: user.username,
+        entityName: user.name || user.username,
         userId: user.id,
-        userName: user.username,
+        userName: user.name || user.username,
         userEmail: req.user?.email || req.email || user?.email || null,
         ip: getIp(req),
         details: { email: user.email }
@@ -282,7 +292,7 @@ router.post('/forgot-password', async (req, res) => {
     
     if (isEmailConfigured) {
       try {
-        await sendPasswordResetEmail(user.email, user.username, resetToken);
+        await sendPasswordResetEmail(user.email, user.name || user.username, resetToken);
         console.log(`✅ Password reset email sent to ${email}`);
       } catch (emailError) {
         console.error('Failed to send password reset email:', emailError);
@@ -325,7 +335,7 @@ router.post('/reset-password', async (req, res) => {
     
     // Find user with valid reset token
     const [users] = await pool.execute(
-      'SELECT id, username, email FROM users WHERE reset_token = ? AND reset_token_expires > NOW()',
+      'SELECT id, name, email FROM users WHERE reset_token = ? AND reset_token_expires > NOW()',
       [token]
     );
     
@@ -350,9 +360,9 @@ router.post('/reset-password', async (req, res) => {
         entityType: 'user',
         entityId: user.id,
         action: 'reset_password',
-        entityName: user.username,
+        entityName: user.name || user.username,
         userId: user.id,
-        userName: user.username,
+        userName: user.name || user.username,
         userEmail: req.user?.email || req.email || user?.email || null,
         ip: getIp(req),
         details: { email: user.email }
@@ -381,9 +391,10 @@ router.get('/users', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const pool = getPool();
     const [users] = await pool.execute(
-      'SELECT id, username, email, role, business_unit as businessUnit, is_active, created_at, updated_at FROM users ORDER BY created_at DESC'
+      'SELECT id, name AS name, email, role, business_unit as businessUnit, is_active, created_at, updated_at FROM users ORDER BY created_at DESC'
     );
-    
+
+    // Return users with `name` field normalized
     res.json({ users });
   } catch (error) {
     console.error('Get users error:', error);
@@ -397,7 +408,7 @@ router.post('/users', authenticateToken, requireAdmin, async (req, res) => {
     const { username, email, password, role, businessUnit, is_active } = req.body;
     
     if (!username || !email || !password || !businessUnit) {
-      return res.status(400).json({ message: 'Username, email, password, and business unit are required' });
+      return res.status(400).json({ message: 'Name, Email Address, Business Unit, and Password are required' });
     }
     
     // Validate business unit
@@ -409,18 +420,18 @@ router.post('/users', authenticateToken, requireAdmin, async (req, res) => {
     
     // Check if user already exists
     const [existingUsers] = await pool.execute(
-      'SELECT id FROM users WHERE username = ? OR email = ?',
+      'SELECT id FROM users WHERE name = ? OR email = ?',
       [username, email]
     );
     
     if (existingUsers.length > 0) {
-      return res.status(409).json({ message: 'Username or email already exists' });
+      return res.status(409).json({ message: 'Name or Email Address already exists' });
     }
     
     const hashedPassword = await bcrypt.hash(password, 10);
     
     const [result] = await pool.execute(
-      'INSERT INTO users (username, email, password, role, business_unit, is_active) VALUES (?, ?, ?, ?, ?, ?)',
+      'INSERT INTO users (name, email, password, role, business_unit, is_active) VALUES (?, ?, ?, ?, ?, ?)',
       [username, email, hashedPassword, role || 'employee', businessUnit, is_active !== false]
     );
     
@@ -432,10 +443,10 @@ router.post('/users', authenticateToken, requireAdmin, async (req, res) => {
         action: 'create',
         entityName: username,
         userId: req.user.userId,
-        userName: req.user.username,
+        userName: req.user.name || req.user.username,
         userEmail: req.user?.email || req.email || user?.email || null,
         ip: getIp(req),
-        details: { email, role: role || 'employee', businessUnit, createdBy: req.user.username }
+        details: { email, role: role || 'employee', businessUnit, createdBy: req.user.name || req.user.username }
       });
     } catch (auditError) {
       console.error('Error logging user creation audit:', auditError);
@@ -461,7 +472,7 @@ router.put('/users/:id', authenticateToken, requireAdmin, async (req, res) => {
     
     // Check if user exists
     const [existingUsers] = await pool.execute(
-      'SELECT username FROM users WHERE id = ?',
+      'SELECT name FROM users WHERE id = ?',
       [id]
     );
     
@@ -469,7 +480,7 @@ router.put('/users/:id', authenticateToken, requireAdmin, async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
     
-    const username = existingUsers[0].username;
+    const username = existingUsers[0].name || existingUsers[0].username;
     
     // Build update query
     const updates = [];
@@ -526,10 +537,10 @@ router.put('/users/:id', authenticateToken, requireAdmin, async (req, res) => {
         action: 'update',
         entityName: username,
         userId: req.user.userId,
-        userName: req.user.username,
+        userName: req.user.name || req.user.username,
         userEmail: req.user?.email || req.email || user?.email || null,
         ip: getIp(req),
-        details: { updatedFields: Object.keys(req.body), updatedBy: req.user.username }
+        details: { updatedFields: Object.keys(req.body), updatedBy: req.user.name || req.user.username }
       });
     } catch (auditError) {
       console.error('Error logging user update audit:', auditError);
@@ -556,7 +567,7 @@ router.delete('/users/:id', authenticateToken, requireAdmin, async (req, res) =>
     
     // Get user info before deleting
     const [users] = await pool.execute(
-      'SELECT username, email FROM users WHERE id = ?',
+      'SELECT name, email FROM users WHERE id = ?',
       [id]
     );
     
@@ -564,7 +575,7 @@ router.delete('/users/:id', authenticateToken, requireAdmin, async (req, res) =>
       return res.status(404).json({ message: 'User not found' });
     }
     
-    const username = users[0].username;
+    const username = users[0].name || users[0].username;
     
     await pool.execute('DELETE FROM users WHERE id = ?', [id]);
     
@@ -576,10 +587,10 @@ router.delete('/users/:id', authenticateToken, requireAdmin, async (req, res) =>
         action: 'delete',
         entityName: username,
         userId: req.user.userId,
-        userName: req.user.username,
+        userName: req.user.name || req.user.username,
         userEmail: req.user?.email || req.email || user?.email || null,
         ip: getIp(req),
-        details: { deletedBy: req.user.username, email: users[0].email }
+        details: { deletedBy: req.user.name || req.user.username, email: users[0].email }
       });
     } catch (auditError) {
       console.error('Error logging user deletion audit:', auditError);
