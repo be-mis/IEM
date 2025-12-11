@@ -50,6 +50,11 @@ export default function SignUp() {
     setError(''); // Clear error when user starts typing
   };
 
+  // Helper to title-case full name (First letters capitalized)
+  const titleCase = (s) => String(s || '').trim().split(/\s+/).filter(Boolean)
+    .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(' ');
+
   const validateForm = () => {
     if (!formData.username || !formData.email || !formData.password || !formData.confirmPassword || !formData.businessUnit) {
       setError('All fields are required');
@@ -91,12 +96,15 @@ export default function SignUp() {
       return;
     }
 
+    const capitalizedName = titleCase(formData.username);
+    // Update UI with capitalized name
+    setFormData(prev => ({ ...prev, username: capitalizedName }));
     try {
       setLoading(true);
       setError('');
 
       const response = await axios.post(`${API_BASE_URL}/auth/register`, {
-        username: formData.username,
+        username: capitalizedName,
         email: formData.email,
         password: formData.password,
         role: formData.role,
@@ -198,10 +206,11 @@ export default function SignUp() {
           <Box component="form" onSubmit={handleSubmit} noValidate>
             <TextField
               fullWidth
-              label="Name"
+              label="Full Name"
               variant="outlined"
               value={formData.username}
               onChange={handleChange('username')}
+              onBlur={() => setFormData(prev => ({ ...prev, username: titleCase(prev.username) }))}
               disabled={loading || success}
               sx={{ mb: 2 }}
               InputProps={{
