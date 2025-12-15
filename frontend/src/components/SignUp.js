@@ -254,8 +254,8 @@ export default function SignUp() {
                 <MenuItem value="">
                   <em>Select Business Unit</em>
                 </MenuItem>
-                <MenuItem value="NBFI">NBFI (Barbizon Fashion)</MenuItem>
-                <MenuItem value="EPC">EPC (Everyday Products Corp)</MenuItem>
+                <MenuItem value="NBFI">NBFI (New Barbizon Fashion Inc.)</MenuItem>
+                <MenuItem value="EPC">EPC (Everyday Products Corp.)</MenuItem>
               </Select>
               {formData.businessUnit && formData.email && (
                 <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, ml: 1.5 }}>
